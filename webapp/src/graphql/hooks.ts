@@ -1,31 +1,35 @@
 import {useCallback} from 'react';
 
-import {autoFollowPlaybook} from 'src/client';
+import {QueryResult, useMutation, useQuery} from '@apollo/client';
 
 import {
+    AddPlaybookMemberDocument,
+    AddRunParticipantsDocument,
+    ChangeRunOwnerDocument,
     PlaybookDocument,
     PlaybookLhsDocument,
     PlaybookQuery,
-    PlaybookQueryHookResult,
     PlaybookUpdates,
-    RunDocument,
+    RemovePlaybookMemberDocument,
+    RemoveRunParticipantsDocument,
+    RhsRunsDocument,
     RunUpdates,
-    useAddPlaybookMemberMutation,
-    useAddRunParticipantsMutation,
-    useChangeRunOwnerMutation,
-    usePlaybookQuery,
-    useRemovePlaybookMemberMutation,
-    useRemoveRunParticipantsMutation,
-    useUpdatePlaybookMutation,
-    useUpdateRunMutation,
-} from 'src/graphql/generated_types';
+    SetRunFavoriteDocument,
+    TaskActionUpdates,
+    UpdatePlaybookDocument,
+    UpdatePlaybookFavoriteDocument,
+    UpdateRunDocument,
+    UpdateRunTaskActionsDocument,
+} from 'src/graphql/generated/graphql';
+
+import {autoFollowPlaybook} from 'src/client';
 
 export type FullPlaybook = PlaybookQuery['playbook']
 
 export type Loaded<T> = Exclude<T, undefined | null>
 
-export const usePlaybook = (id: string): [FullPlaybook, PlaybookQueryHookResult] => {
-    const result = usePlaybookQuery({
+export const usePlaybook = (id: string): [FullPlaybook, QueryResult<PlaybookQuery, {id: string}>] => {
+    const result = useQuery(PlaybookDocument, {
         variables: {
             id,
         },
@@ -33,14 +37,14 @@ export const usePlaybook = (id: string): [FullPlaybook, PlaybookQueryHookResult]
         nextFetchPolicy: 'cache-first',
     });
 
-    let playbook = result.data?.playbook;
+    let playbook : FullPlaybook = result.data?.playbook;
     playbook = playbook === null ? undefined : playbook;
 
     return [playbook, result];
 };
 
 export const useUpdatePlaybook = (id?: string) => {
-    const [innerUpdatePlaybook] = useUpdatePlaybookMutation({
+    const [innerUpdatePlaybook] = useMutation(UpdatePlaybookDocument, {
         refetchQueries: [
             PlaybookDocument,
         ],
@@ -50,10 +54,27 @@ export const useUpdatePlaybook = (id?: string) => {
     }, [id, innerUpdatePlaybook]);
 };
 
-export const useUpdateRun = (id?: string) => {
-    const [innerUpdateRun] = useUpdateRunMutation({
+export const useUpdatePlaybookFavorite = (id: string|undefined) => {
+    const [innerUpdatePlaybook] = useMutation(UpdatePlaybookFavoriteDocument, {
         refetchQueries: [
             PlaybookLhsDocument,
+            PlaybookDocument,
+        ],
+    });
+
+    return useCallback((favorite: boolean) => {
+        if (id === undefined) {
+            return;
+        }
+        innerUpdatePlaybook({variables: {id, favorite}});
+    }, [id, innerUpdatePlaybook]);
+};
+
+export const useUpdateRun = (id?: string) => {
+    const [innerUpdateRun] = useMutation(UpdateRunDocument, {
+        refetchQueries: [
+            PlaybookLhsDocument,
+            RhsRunsDocument,
         ],
     });
 
@@ -62,8 +83,23 @@ export const useUpdateRun = (id?: string) => {
     }, [id, innerUpdateRun]);
 };
 
+export const useSetRunFavorite = (id: string|undefined) => {
+    const [innerUpdateRun] = useMutation(SetRunFavoriteDocument, {
+        refetchQueries: [
+            PlaybookLhsDocument,
+        ],
+    });
+
+    return useCallback((fav: boolean) => {
+        if (id === undefined) {
+            return;
+        }
+        innerUpdateRun({variables: {id, fav}});
+    }, [id, innerUpdateRun]);
+};
+
 export const usePlaybookMembership = (playbookID?: string, userID?: string) => {
-    const [joinPlaybook] = useAddPlaybookMemberMutation({
+    const [joinPlaybook] = useMutation(AddPlaybookMemberDocument, {
         refetchQueries: [
             PlaybookLhsDocument,
         ],
@@ -73,7 +109,7 @@ export const usePlaybookMembership = (playbookID?: string, userID?: string) => {
         },
     });
 
-    const [leavePlaybook] = useRemovePlaybookMemberMutation({
+    const [leavePlaybook] = useMutation(RemovePlaybookMemberDocument, {
         refetchQueries: [
             PlaybookLhsDocument,
         ],
@@ -101,67 +137,29 @@ export const usePlaybookMembership = (playbookID?: string, userID?: string) => {
     return {join, leave};
 };
 
-export const useRunMembership = (runID?: string, userIDs?: string[]) => {
-    const [add] = useAddRunParticipantsMutation({
-        refetchQueries: [
-            PlaybookLhsDocument,
-        ],
-        variables: {
-            runID: runID || '',
-            userIDs: userIDs || [],
-        },
-    });
-
-    const [remove] = useRemoveRunParticipantsMutation({
-        refetchQueries: [
-            PlaybookLhsDocument,
-        ],
-        variables: {
-            runID: runID || '',
-            userIDs: userIDs || [],
-        },
-    });
-
-    const addToRun = useCallback(async () => {
-        if (!runID || !userIDs || userIDs?.length === 0) {
-            return;
-        }
-        await add();
-    }, [runID, JSON.stringify(userIDs), add]);
-
-    const removeFromRun = useCallback(async () => {
-        if (!runID || !userIDs || userIDs?.length === 0) {
-            return;
-        }
-        await remove();
-    }, [runID, JSON.stringify(userIDs), remove]);
-    return {addToRun, removeFromRun};
-};
-
 export const useManageRunMembership = (runID?: string) => {
-    const [add] = useAddRunParticipantsMutation({
+    const [add] = useMutation(AddRunParticipantsDocument, {
         refetchQueries: [
-            RunDocument,
+            PlaybookLhsDocument,
         ],
     });
 
-    const [remove] = useRemoveRunParticipantsMutation({
+    const [remove] = useMutation(RemoveRunParticipantsDocument, {
         refetchQueries: [
-            RunDocument,
+            PlaybookLhsDocument,
         ],
     });
 
-    const [changeOwner] = useChangeRunOwnerMutation({
+    const [changeOwner] = useMutation(ChangeRunOwnerDocument, {
         refetchQueries: [
-            RunDocument,
         ],
     });
 
-    const addToRun = useCallback(async (userIDs?: string[]) => {
+    const addToRun = useCallback(async (userIDs?: string[], forceAddToChannel?: boolean) => {
         if (!runID || !userIDs || userIDs?.length === 0) {
             return;
         }
-        await add({variables: {runID: runID || '', userIDs: userIDs || []}});
+        await add({variables: {runID: runID || '', userIDs: userIDs || [], forceAddToChannel: forceAddToChannel || false}});
     }, [runID, add]);
 
     const removeFromRun = useCallback(async (userIDs?: string[]) => {
@@ -179,4 +177,20 @@ export const useManageRunMembership = (runID?: string) => {
     }, [runID, changeOwner]);
 
     return {addToRun, removeFromRun, changeRunOwner};
+};
+
+export const useUpdateRunItemTaskActions = (runID?: string) => {
+    const [updateTaskActions] = useMutation(UpdateRunTaskActionsDocument, {
+        refetchQueries: [
+        ],
+    });
+
+    const updateRunTaskActions = useCallback(async (checklistNum: number, itemNum: number, taskActions: TaskActionUpdates[]) => {
+        if (!runID) {
+            return;
+        }
+        await updateTaskActions({variables: {runID, checklistNum, itemNum, taskActions}});
+    }, [runID, updateTaskActions]);
+
+    return {updateRunTaskActions};
 };

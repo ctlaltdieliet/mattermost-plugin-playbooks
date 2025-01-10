@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 
 import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
-import React, {useRef} from 'react';
+import React, {PropsWithChildren, ReactNode, useRef} from 'react';
 import {FormattedMessage, useIntl} from 'react-intl';
 import {useDispatch, useSelector} from 'react-redux';
 import styled from 'styled-components';
@@ -19,18 +19,22 @@ import TemplateSelector from 'src/components/templates/template_selector';
 import {PaginationRow} from 'src/components/pagination_row';
 import {SortableColHeader} from 'src/components/sortable_col_header';
 import {BACKSTAGE_LIST_PER_PAGE} from 'src/constants';
-import {
-    useCanCreatePlaybooksOnAnyTeam,
-    usePlaybooksCrud,
-    usePlaybooksRouting,
-} from 'src/hooks';
+import {useCanCreatePlaybooksInTeam, usePlaybooksCrud, usePlaybooksRouting} from 'src/hooks';
 import {useImportPlaybook} from 'src/components/backstage/import_playbook';
 import {Playbook} from 'src/types/playbook';
 import PresetTemplates from 'src/components/templates/template_data';
 import {RegularHeading} from 'src/styles/headings';
 import {pluginUrl} from 'src/browser_routing';
 
-import Header from '../widgets/header';
+import Header from 'src/components/widgets/header';
+
+import {useLHSRefresh} from 'src/components/backstage/lhs_navigation';
+
+import {ToastStyle} from 'src/components/backstage/toast';
+import {useToaster} from 'src/components/backstage/toast_banner';
+
+import {useFileDragDetection} from 'src/components/backstage/file_drag_detection';
+import {FileUploadOverlay} from 'src/components/backstage/file_upload_overlay';
 
 import CheckboxInput from './runs_list/checkbox_input';
 import useConfirmPlaybookArchiveModal from './archive_playbook_modal';
@@ -44,6 +48,14 @@ const ContainerMedium = styled.article`
 
 const PlaybookListContainer = styled.div`
     color: rgba(var(--center-channel-color-rgb), 0.9);
+    position: relative;
+    height: 100%;
+    overflow-y: hidden;
+`;
+
+const ScrollContainer = styled.div`
+  height: 100%;
+  overflow-y: auto;
 `;
 
 const TableContainer = styled.div`
@@ -99,30 +111,49 @@ const TitleActions = styled.div`
     display: flex;
 `;
 
+const ImportSub = styled(Sub)`
+    margin-top: 8px;
+    margin-bottom: 0;
+    font-size: 14px;
+    line-height: 20px;
+    color: inherit;
+`;
+
+const ImportLink = styled.a`
+    font-weight: 600;
+`;
+
 const PlaybooksListFilters = styled.div`
     display: flex;
     padding: 16px;
     align-items: center;
 `;
 
-const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
+const PlaybookList = (props: { firstTimeUserExperience?: boolean }) => {
     const {formatMessage} = useIntl();
-    const canCreatePlaybooks = useCanCreatePlaybooksOnAnyTeam();
     const teamId = useSelector(getCurrentTeamId);
+    const canCreatePlaybooks = useCanCreatePlaybooksInTeam(teamId);
     const content = useRef<JSX.Element | null>(null);
     const selectorRef = useRef<HTMLDivElement>(null);
+    const refreshLHS = useLHSRefresh();
+    const addToast = useToaster().add;
 
-    const [
+    const {
         playbooks,
-        {isLoading, totalCount, params},
-        {setPage, sortBy, setSelectedPlaybook, archivePlaybook, restorePlaybook, duplicatePlaybook, setSearchTerm, isFiltering, setWithArchived, fetchPlaybooks},
-    ] = usePlaybooksCrud({per_page: BACKSTAGE_LIST_PER_PAGE});
+        isLoading, totalCount, params,
+        setPage, sortBy, setSelectedPlaybook, archivePlaybook, restorePlaybook, duplicatePlaybook, setSearchTerm, isFiltering, setWithArchived, fetchPlaybooks,
+    } = usePlaybooksCrud({per_page: BACKSTAGE_LIST_PER_PAGE});
 
     const [confirmArchiveModal, openConfirmArchiveModal] = useConfirmPlaybookArchiveModal(archivePlaybook);
     const [confirmRestoreModal, openConfirmRestoreModal] = useConfirmPlaybookRestoreModal(restorePlaybook);
 
     const {view, edit} = usePlaybooksRouting<string>({onGo: setSelectedPlaybook});
-    const [fileInputRef, inputImportPlaybook] = useImportPlaybook(teamId, (id: string) => edit(id));
+    const [fileInputRef, inputImportPlaybook, importPlaybookFile] = useImportPlaybook(teamId, (id: string) => {
+        refreshLHS();
+        edit(id);
+    });
+
+    const isDraggingFile = useFileDragDetection();
 
     const hasPlaybooks = Boolean(playbooks?.length);
 
@@ -132,6 +163,33 @@ const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
 
     const scrollToTemplates = () => {
         selectorRef.current?.scrollIntoView({behavior: 'smooth'});
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImportDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleImportDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleImportDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (!e.dataTransfer.files?.[0]) {
+            return;
+        }
+        if (e.dataTransfer.files.length > 1) {
+            addToast({
+                content: formatMessage({defaultMessage: 'Can not import multiple files at once.'}),
+                toastStyle: ToastStyle.Failure,
+            });
+            return;
+        }
+        importPlaybookFile(e.dataTransfer.files[0]);
     };
 
     let listBody: JSX.Element | JSX.Element[] | null = null;
@@ -150,7 +208,7 @@ const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
                 onEdit={() => edit(p.id)}
                 onRestore={() => openConfirmRestoreModal({id: p.id, title: p.title})}
                 onArchive={() => openConfirmArchiveModal(p)}
-                onDuplicate={() => duplicatePlaybook(p.id)}
+                onDuplicate={() => duplicatePlaybook(p.id).then(refreshLHS)}
                 onMembershipChanged={() => fetchPlaybooks()}
             />
         ));
@@ -164,6 +222,7 @@ const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
                         canCreatePlaybooks={canCreatePlaybooks}
                         scrollToNext={scrollToTemplates}
                     />
+                    {inputImportPlaybook}
                 </>
             );
         }
@@ -180,12 +239,9 @@ const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
                             {canCreatePlaybooks && (
                                 <>
                                     <ImportButton
-                                        onClick={() => {
-                                            if (fileInputRef && fileInputRef.current) {
-                                                fileInputRef.current.click();
-                                            }
-                                        }}
+                                        onClick={handleImportClick}
                                     />
+                                    {inputImportPlaybook}
                                     <HorizontalSpacer size={12}/>
                                     <PlaybookModalButton/>
                                 </>
@@ -211,7 +267,6 @@ const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
                         onChange={setWithArchived}
                     />
                     <HorizontalSpacer size={12}/>
-                    {inputImportPlaybook}
                 </PlaybooksListFilters>
                 <BackstageListHeader $edgeless={true}>
                     <div className='row'>
@@ -270,39 +325,64 @@ const PlaybookList = (props: {firstTimeUserExperience?: boolean}) => {
 
     return (
         <PlaybookListContainer>
-            {content.current}
-            {canCreatePlaybooks && (
-                <>
-                    <ContainerMedium
-                        ref={selectorRef}
-                    >
-                        {props.firstTimeUserExperience || (!hasPlaybooks && !isFiltering) ? (
-                            <AltCreatePlaybookHeader>
-                                <AltHeading>
-                                    {formatMessage({defaultMessage: 'Choose a template'})}
-                                </AltHeading>
-                                <AltSub>
-                                    {formatMessage({defaultMessage: 'There are templates for a range of use cases and events. You can use a playbook as-is or customize it—then share it with your team.'})}
-                                </AltSub>
-                            </AltCreatePlaybookHeader>
-                        ) : (
-                            <CreatePlaybookHeader>
-                                <Heading>
-                                    {formatMessage({defaultMessage: 'Do more with Playbooks'})}
-                                </Heading>
-                                <Sub>
-                                    {formatMessage({defaultMessage: 'There are templates for a range of use cases and events. You can use a playbook as-is or customize it—then share it with your team.'})}
-                                </Sub>
-                            </CreatePlaybookHeader>
-                        )}
-                        <TemplateSelector
-                            templates={props.firstTimeUserExperience || (!hasPlaybooks && !isFiltering) ? swapEnds(PresetTemplates) : PresetTemplates}
-                        />
-                    </ContainerMedium>
-                </>
-            )}
-            {confirmArchiveModal}
-            {confirmRestoreModal}
+            <FileUploadOverlay
+                show={isDraggingFile}
+                message={formatMessage({
+                    defaultMessage: 'Drop a playbook export file to import it.',
+                })}
+                overlayType='center'
+            />
+            <ScrollContainer
+                onDragEnter={handleImportDragEnter}
+                onDragOver={handleImportDragOver}
+                onDrop={handleImportDrop}
+                data-testid='playbook-list-scroll-container'
+            >
+                {content.current}
+                {canCreatePlaybooks && (
+                    <>
+                        <ContainerMedium
+                            ref={selectorRef}
+                        >
+                            {props.firstTimeUserExperience || (!hasPlaybooks && !isFiltering) ? (
+                                <AltCreatePlaybookHeader>
+                                    <AltHeading>
+                                        {formatMessage({defaultMessage: 'Choose a template'})}
+                                    </AltHeading>
+                                    <ImportSub>
+                                        {formatMessage<ReactNode>({defaultMessage: 'or <ImportPlaybookButton>Import a playbook</ImportPlaybookButton>'}, {
+                                            ImportPlaybookButton: (chunks) => (
+                                                <ImportLinkButton
+                                                    onClick={handleImportClick}
+                                                >
+                                                    {chunks}
+                                                </ImportLinkButton>
+                                            ),
+                                        })}
+                                    </ImportSub>
+                                    <AltSub>
+                                        {formatMessage({defaultMessage: 'There are templates for a range of use cases and events. You can use a playbook as-is or customize it—then share it with your team.'})}
+                                    </AltSub>
+                                </AltCreatePlaybookHeader>
+                            ) : (
+                                <CreatePlaybookHeader>
+                                    <Heading>
+                                        {formatMessage({defaultMessage: 'Do more with Playbooks'})}
+                                    </Heading>
+                                    <Sub>
+                                        {formatMessage({defaultMessage: 'There are templates for a range of use cases and events. You can use a playbook as-is or customize it—then share it with your team.'})}
+                                    </Sub>
+                                </CreatePlaybookHeader>
+                            )}
+                            <TemplateSelector
+                                templates={props.firstTimeUserExperience || (!hasPlaybooks && !isFiltering) ? swapEnds(PresetTemplates) : PresetTemplates}
+                            />
+                        </ContainerMedium>
+                    </>
+                )}
+                {confirmArchiveModal}
+                {confirmRestoreModal}
+            </ScrollContainer>
         </PlaybookListContainer>
     );
 };
@@ -311,13 +391,21 @@ function swapEnds(arr: Array<any>) {
     return [arr[arr.length - 1], ...arr.slice(1, -1), arr[0]];
 }
 
-const ImportButton = (props: {onClick?: () => void}) => {
+interface ImportButtonProps {
+    onClick?: () => void;
+}
+
+const ImportButton = (props: ImportButtonProps) => {
     return (
-        <TertiaryButton
-            onClick={props.onClick}
-        >
+        <TertiaryButton {...props}>
             <FormattedMessage defaultMessage='Import'/>
         </TertiaryButton>
+    );
+};
+
+const ImportLinkButton = (props: PropsWithChildren<ImportButtonProps>) => {
+    return (
+        <ImportLink {...props}/>
     );
 };
 

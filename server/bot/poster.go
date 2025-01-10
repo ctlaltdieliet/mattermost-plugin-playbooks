@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 const maxAdminsToQueryForNotification = 1000
@@ -266,6 +267,7 @@ func (b *Bot) NotifyAdmins(messageType, authorUserID string, isTeamEdition bool)
 				return
 			}
 
+			//nolint:govet
 			if _, err := b.PostCustomMessageWithAttachments(channel.Id, postType, attachments, message); err != nil {
 				logrus.WithError(err).WithField("user_id", adminID).Error("failed to send a DM to user")
 			}
@@ -273,29 +275,6 @@ func (b *Bot) NotifyAdmins(messageType, authorUserID string, isTeamEdition bool)
 	}
 
 	b.telemetry.NotifyAdmins(authorUserID, messageType)
-
-	return nil
-}
-
-func (b *Bot) PromptForFeedback(userID string) error {
-	feedbackBot, err := b.pluginAPI.User.GetByUsername("feedbackbot")
-	if err != nil {
-		return fmt.Errorf("unable to find feedbackbot user: %w", err)
-	}
-
-	channel, err := b.pluginAPI.Channel.GetDirect(userID, feedbackBot.Id)
-	if err != nil {
-		return fmt.Errorf("failed to get direct message channel between user %s and feedbackbot %s: %w", userID, feedbackBot.Id, err)
-	}
-
-	post := &model.Post{
-		ChannelId: channel.Id,
-		UserId:    feedbackBot.Id,
-		Message:   "Have feedback about Playbooks?",
-	}
-	if err := b.pluginAPI.Post.CreatePost(post); err != nil {
-		return fmt.Errorf("failed to create post: %w", err)
-	}
 
 	return nil
 }

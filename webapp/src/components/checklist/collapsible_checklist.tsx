@@ -7,9 +7,7 @@ import {DraggableProvided} from 'react-beautiful-dnd';
 
 import {FormattedMessage, useIntl} from 'react-intl';
 
-import {
-    clientRenameChecklist,
-} from 'src/client';
+import {clientRenameChecklist} from 'src/client';
 import {ChecklistItem, ChecklistItemState} from 'src/types/playbook';
 import TextWithTooltipWhenEllipsis from 'src/components/widgets/text_with_tooltip_when_ellipsis';
 import {CancelSaveButtons} from 'src/components/checklist_item/inputs';
@@ -203,12 +201,12 @@ const ProgressLine = styled.div<{width: number}>`
 
 export const HorizontalBG = styled.div<{menuIsOpen: boolean}>`
     background-color: var(--center-channel-bg);
-    
+
     /* sets a higher z-index to the checklist with open menu */
     z-index: ${({menuIsOpen}) => (menuIsOpen ? '2' : '1')};
 
     position: sticky;
-    top: 48px; // height of rhs_checklists MainTitle
+    top: 0;
 `;
 
 const Horizontal = styled.div`

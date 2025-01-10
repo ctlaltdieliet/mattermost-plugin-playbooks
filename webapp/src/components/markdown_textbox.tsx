@@ -1,13 +1,18 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {MouseEvent, ChangeEvent, useState, ComponentProps, useRef} from 'react';
+import React, {
+    ChangeEvent,
+    ComponentProps,
+    MouseEvent,
+    useRef,
+    useState,
+} from 'react';
 import {useIntl} from 'react-intl';
 
 import {useSelector} from 'react-redux';
 
 import classNames from 'classnames';
-import {Link} from 'react-router-dom';
 import styled from 'styled-components';
 
 import {getConfig} from 'mattermost-redux/selectors/entities/general';
@@ -96,12 +101,23 @@ const Wrapper = styled.div`
         margin-bottom: 6px;
     }
 
+    && .textarea-wrapper-preview  {
+        .custom-textarea.custom-textarea.textbox-preview-area {
+            display: block!important;
+            z-index: 0;
+        }
+        .input-wrapper {
+            display: none;
+        }
+    }
+
     && {
         .custom-textarea.custom-textarea {
             background-color: var(--center-channel-bg);;
 
             &.textbox-preview-area {
                 background-color: rgba(var(--center-channel-color-rgb), 0.04);
+                display: none!important;
             }
 
             height: unset;
@@ -192,14 +208,6 @@ function TextboxLinks({
                         {showPreview ? formatMessage({defaultMessage: 'Edit'}) : formatMessage({defaultMessage: 'Preview'})}
                     </button>
                 )}
-                <Link
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    to='/help/formatting'
-                    className='textbox-help-link'
-                >
-                    {formatMessage({defaultMessage: 'Help'})}
-                </Link>
             </NoWrap>
         </div>
     );

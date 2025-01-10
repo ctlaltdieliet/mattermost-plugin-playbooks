@@ -1,9 +1,11 @@
 package app
 
 import (
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 
 	"github.com/mattermost/mattermost-plugin-playbooks/server/bot"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/metrics"
@@ -21,6 +23,12 @@ type playbookService struct {
 	telemetry      PlaybookTelemetry
 	api            *pluginapi.Client
 	metricsService *metrics.Metrics
+}
+
+type InsightsOpts struct {
+	StartUnixMilli int64
+	Page           int
+	PerPage        int
 }
 
 // NewPlaybookService returns a new playbook service
@@ -70,6 +78,10 @@ func (s *playbookService) Get(id string) (Playbook, error) {
 
 func (s *playbookService) GetPlaybooks() ([]Playbook, error) {
 	return s.store.GetPlaybooks()
+}
+
+func (s *playbookService) GetActivePlaybooks() ([]Playbook, error) {
+	return s.store.GetActivePlaybooks()
 }
 
 func (s *playbookService) GetPlaybooksForTeam(requesterInfo RequesterInfo, teamID string, opts PlaybookFilterOptions) (GetPlaybooksResults, error) {
@@ -174,6 +186,11 @@ func (s *playbookService) GetAutoFollows(playbookID string) ([]string, error) {
 
 // Duplicate duplicates a playbook
 func (s *playbookService) Duplicate(playbook Playbook, userID string) (string, error) {
+	logger := logrus.WithFields(logrus.Fields{
+		"original_playbook_id": playbook.ID,
+		"user_id":              userID,
+	})
+
 	newPlaybook := playbook.Clone()
 	newPlaybook.ID = ""
 	// Empty metric IDs if there are such. Otherwise, metrics will not be saved in the database.
@@ -182,12 +199,24 @@ func (s *playbookService) Duplicate(playbook Playbook, userID string) (string, e
 	}
 	newPlaybook.Title = "Copy of " + playbook.Title
 
-	return s.Create(newPlaybook, userID)
+	// On duplicating, make the current user the administrator.
+	newPlaybook.Members = []PlaybookMember{{
+		UserID: userID,
+		Roles:  []string{PlaybookRoleMember, PlaybookRoleAdmin},
+	}}
+
+	playbookID, err := s.Create(newPlaybook, userID)
+	if err != nil {
+		return "", err
+	}
+
+	logger.WithField("playbook_id", playbookID).Debug("Duplicated playbook")
+	return playbookID, nil
 }
 
 // get top playbooks for teams
-func (s *playbookService) GetTopPlaybooksForTeam(teamID, userID string, opts *model.InsightsOpts) (*PlaybooksInsightsList, error) {
-	permissionFlag, err := licenseAndGuestCheck(s, userID)
+func (s *playbookService) GetTopPlaybooksForTeam(teamID, userID string, opts *InsightsOpts) (*PlaybooksInsightsList, error) {
+	permissionFlag, err := licenseAndGuestCheck(s, userID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -199,8 +228,8 @@ func (s *playbookService) GetTopPlaybooksForTeam(teamID, userID string, opts *mo
 }
 
 // get top playbooks for users
-func (s *playbookService) GetTopPlaybooksForUser(teamID, userID string, opts *model.InsightsOpts) (*PlaybooksInsightsList, error) {
-	permissionFlag, err := licenseAndGuestCheck(s, userID)
+func (s *playbookService) GetTopPlaybooksForUser(teamID, userID string, opts *InsightsOpts) (*PlaybooksInsightsList, error) {
+	permissionFlag, err := licenseAndGuestCheck(s, userID, true)
 	if err != nil {
 		return nil, err
 	}
@@ -211,22 +240,27 @@ func (s *playbookService) GetTopPlaybooksForUser(teamID, userID string, opts *mo
 	return s.store.GetTopPlaybooksForUser(teamID, userID, opts)
 }
 
-func licenseAndGuestCheck(s *playbookService, userID string) (bool, error) {
+func licenseAndGuestCheck(s *playbookService, userID string, isMyInsights bool) (bool, error) {
 	licenseError := errors.New("invalid license/authorization to use insights API")
 	guestError := errors.New("Guests aren't authorized to use insights API")
 	lic := s.api.System.GetLicense()
-	if lic == nil {
-		return false, licenseError
-	}
+
 	user, err := s.api.User.Get(userID)
 	if err != nil {
 		return false, err
 	}
-	if lic.SkuShortName != model.LicenseShortSkuProfessional && lic.SkuShortName != model.LicenseShortSkuEnterprise {
-		return false, licenseError
-	}
+
 	if user.IsGuest() {
 		return false, guestError
 	}
+
+	if lic == nil && !isMyInsights {
+		return false, licenseError
+	}
+
+	if !isMyInsights && (lic.SkuShortName != model.LicenseShortSkuProfessional && lic.SkuShortName != model.LicenseShortSkuEnterprise) {
+		return false, licenseError
+	}
+
 	return true, nil
 }

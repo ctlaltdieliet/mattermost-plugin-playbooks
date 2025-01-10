@@ -4,8 +4,6 @@
 import React from 'react';
 import {useIntl} from 'react-intl';
 
-import {useFloatingPortalNode} from '@floating-ui/react-dom-interactions';
-
 import {usePlaybook, usePlaybooksCrud} from 'src/hooks';
 
 import MarkdownTextbox from 'src/components/markdown_textbox';
@@ -49,9 +47,8 @@ interface OptionType {
 
 export const RunPlaybookChildren = ({playbookId, onUpdate, editable}: RunPlaybookProps) => {
     const {formatMessage} = useIntl();
-    const portalEl = useFloatingPortalNode();
     const [playbook] = usePlaybook(playbookId);
-    const [playbooks, {params}, {setSearchTerm}] = usePlaybooksCrud({sort: 'title'}, {infinitePaging: false});
+    const {playbooks, params, setSearchTerm} = usePlaybooksCrud({sort: 'title'}, {infinitePaging: false});
 
     // Format the playbooks for use with StyledSelect.
     const playbookOptions = playbooks?.map((p) => ({value: p.title, label: p.title, id: p.id})) || [];

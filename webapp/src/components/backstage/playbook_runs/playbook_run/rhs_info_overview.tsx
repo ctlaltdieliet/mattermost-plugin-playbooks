@@ -2,87 +2,42 @@
 // See LICENSE.txt for license information.
 
 import React, {useState} from 'react';
-import {useDispatch, useSelector} from 'react-redux';
 import {Link} from 'react-router-dom';
 import {useIntl} from 'react-intl';
 import styled, {css} from 'styled-components';
 import {Channel} from '@mattermost/types/channels';
 
 import {
-    AccountOutlineIcon,
     AccountMultipleOutlineIcon,
+    AccountOutlineIcon,
+    ArrowForwardIosIcon,
     BookOutlineIcon,
     BullhornOutlineIcon,
-    ProductChannelsIcon,
-    OpenInNewIcon,
     LockOutlineIcon,
-    ArrowForwardIosIcon,
+    OpenInNewIcon,
+    ProductChannelsIcon,
 } from '@mattermost/compass-icons/components';
-import {addChannelMember} from 'mattermost-redux/actions/channels';
-import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 import {UserProfile} from '@mattermost/types/users';
 
+import {TertiaryButton} from 'src/components/assets/buttons';
+import FollowButton from 'src/components/backstage/follow_button';
 import {Role} from 'src/components/backstage/playbook_runs/shared';
-import {SecondaryButton, TertiaryButton} from 'src/components/assets/buttons';
-import {useToaster, ToastType} from 'src/components/backstage/toast_banner';
+import {useToaster} from 'src/components/backstage/toast_banner';
+import {ToastStyle} from 'src/components/backstage/toast';
 import Following from 'src/components/backstage/playbook_runs/playbook_run/following';
-import AssignTo, {AssignToContainer} from 'src/components/checklist_item/assign_to';
+import AssignTo from 'src/components/checklist_item/assign_to';
 import {UserList} from 'src/components/rhs/rhs_participants';
 import {Section, SectionHeader} from 'src/components/backstage/playbook_runs/playbook_run/rhs_info_styles';
 import ConfirmModal from 'src/components/widgets/confirmation_modal';
-
-import {requestJoinChannel, followPlaybookRun, unfollowPlaybookRun, setOwner as clientSetOwner} from 'src/client';
+import {setOwner as clientSetOwner, requestJoinChannel} from 'src/client';
 import {pluginUrl} from 'src/browser_routing';
-import {useFormattedUsername} from 'src/hooks';
-import {PlaybookRun, Metadata} from 'src/types/playbook_run';
+import {Metadata, PlaybookRun} from 'src/types/playbook_run';
 import {PlaybookWithChecklist} from 'src/types/playbook';
 import {CompassIcon} from 'src/types/compass';
 
-import {useLHSRefresh} from '../../lhs_navigation';
+import {useLHSRefresh} from 'src/components/backstage/lhs_navigation';
 
 import {FollowState} from './rhs_info';
-
-export const useFollow = (runID: string, followState: FollowState) => {
-    const {formatMessage} = useIntl();
-    const addToast = useToaster().add;
-    const {isFollowing, followers, setFollowers} = followState;
-    const currentUser = useSelector(getCurrentUser);
-    const refreshLHS = useLHSRefresh();
-
-    const toggleFollow = () => {
-        const action = isFollowing ? unfollowPlaybookRun : followPlaybookRun;
-        action(runID)
-            .then(() => {
-                const newFollowers = isFollowing ? followers.filter((userId) => userId !== currentUser.id) : [...followers, currentUser.id];
-                setFollowers(newFollowers);
-                refreshLHS();
-            })
-            .catch(() => {
-                addToast(formatMessage({defaultMessage: 'It was not possible to {isFollowing, select, true {unfollow} other {follow}} the run'}, {isFollowing}), ToastType.Failure);
-            });
-    };
-
-    const FollowingButton = () => {
-        if (isFollowing) {
-            return (
-                <UnfollowButton onClick={toggleFollow}>
-                    {formatMessage({defaultMessage: 'Following'})}
-                </UnfollowButton>
-            );
-        }
-
-        return (
-            <FollowButton
-                data-testid={'rdp-rhs-follow-button'}
-                onClick={toggleFollow}
-            >
-                {formatMessage({defaultMessage: 'Follow'})}
-            </FollowButton>
-        );
-    };
-
-    return FollowingButton;
-};
 
 const useRequestJoinChannel = (playbookRunId: string) => {
     const {formatMessage} = useIntl();
@@ -91,9 +46,15 @@ const useRequestJoinChannel = (playbookRunId: string) => {
     const requestJoin = async () => {
         const response = await requestJoinChannel(playbookRunId);
         if (response?.error) {
-            addToast(formatMessage({defaultMessage: 'The join channel request was unsuccessful.'}), ToastType.Failure);
+            addToast({
+                content: formatMessage({defaultMessage: 'The join channel request was unsuccessful.'}),
+                toastStyle: ToastStyle.Failure,
+            });
         } else {
-            addToast(formatMessage({defaultMessage: 'Your request was sent to the run channel.'}), ToastType.Success);
+            addToast({
+                content: formatMessage({defaultMessage: 'Your request was sent to the run channel.'}),
+                toastStyle: ToastStyle.Success,
+            });
         }
     };
     const RequestJoinModal = (
@@ -120,6 +81,7 @@ interface Props {
     runMetadata?: Metadata;
     editable: boolean;
     channel: Channel | undefined | null;
+    channelDeleted: boolean;
     followState: FollowState;
     playbook?: PlaybookWithChecklist;
     role: Role;
@@ -130,12 +92,9 @@ const StyledArrowIcon = styled(ArrowForwardIosIcon)`
     margin-left: 7px;
 `;
 
-const RHSInfoOverview = ({run, role, channel, runMetadata, followState, editable, playbook, onViewParticipants}: Props) => {
+const RHSInfoOverview = ({run, role, channel, channelDeleted, runMetadata, followState, editable, playbook, onViewParticipants}: Props) => {
     const {formatMessage} = useIntl();
     const addToast = useToaster().add;
-    const [showAddToChannel, setShowAddToChannel] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-    const FollowingButton = useFollow(run.id, followState);
     const refreshLHS = useLHSRefresh();
     const {RequestJoinModal, showRequestJoinConfirm} = useRequestJoinChannel(run.id);
 
@@ -153,26 +112,26 @@ const RHSInfoOverview = ({run, role, channel, runMetadata, followState, editable
                     message = formatMessage({defaultMessage: 'It was not possible to change the owner'});
                 }
 
-                addToast(message, ToastType.Failure);
+                addToast({
+                    content: message,
+                    toastStyle: ToastStyle.Failure,
+                });
             } else {
                 refreshLHS();
             }
         } catch (error) {
-            addToast(formatMessage({defaultMessage: 'It was not possible to change the owner'}), ToastType.Failure);
+            addToast({
+                content: formatMessage({defaultMessage: 'It was not possible to change the owner'}),
+                toastStyle: ToastStyle.Failure,
+            });
         }
     };
 
-    const onOwnerChange = async (userType?: string, user?: UserProfile) => {
-        if (!user || !userType) {
+    const onOwnerChange = async (user?: UserProfile) => {
+        if (!user) {
             return;
         }
-
-        if (userType === 'Member') {
-            setOwner(user.id);
-        } else {
-            setSelectedUser(user);
-            setShowAddToChannel(true);
-        }
+        setOwner(user.id);
     };
 
     return (
@@ -194,7 +153,7 @@ const RHSInfoOverview = ({run, role, channel, runMetadata, followState, editable
                     assignee_id={run.owner_user_id}
                     editable={editable}
                     onSelectedChange={onOwnerChange}
-                    channelId={run.channel_id}
+                    participantUserIds={run.participant_ids}
                     placement={'bottom-end'}
                 />
             </Item>
@@ -223,47 +182,29 @@ const RHSInfoOverview = ({run, role, channel, runMetadata, followState, editable
                 name={formatMessage({defaultMessage: 'Followers'})}
             >
                 <FollowersWrapper>
-                    <FollowingButton/>
+                    <FollowButton
+                        runID={run.id}
+                        followState={followState}
+                        trigger={'run_details'}
+                    />
                     <Following
                         userIds={followState.followers}
                         maxUsers={4}
                     />
                 </FollowersWrapper>
             </Item>
-            {selectedUser &&
-            <AddToChannelModal
-                user={selectedUser}
-                channelId={run.channel_id}
-                setOwner={setOwner}
-                show={showAddToChannel}
-                onHide={() => {
-                    setShowAddToChannel(false);
-                    setSelectedUser(null);
-                }}
-            />}
             <Item
                 id='runinfo-channel'
                 icon={ProductChannelsIcon}
                 name={formatMessage({defaultMessage: 'Channel'})}
             >
-                {channel && runMetadata ? <>
-                    <ItemLink
-                        to={`/${runMetadata.team_name}/channels/${channel.name}`}
-                        data-testid='runinfo-channel-link'
-                    >
-                        <ItemContent >
-                            {channel.display_name}
-                        </ItemContent>
-                        <OpenInNewIcon
-                            size={14}
-                            color={'var(--button-bg)'}
-                        />
-                    </ItemLink>
-                </> : <ItemDisabledContent>
-                    {role === Role.Participant ? <RequestJoinButton onClick={showRequestJoinConfirm}>{formatMessage({defaultMessage: 'Request to Join'})}</RequestJoinButton> : null}
-                    <LockOutlineIcon size={20}/> {formatMessage({defaultMessage: 'Private'})}
-                </ItemDisabledContent>
-                }
+                <ChannelRow
+                    channel={channel}
+                    runMetadata={runMetadata}
+                    channelDeleted={channelDeleted}
+                    role={role}
+                    onClickRequestJoin={showRequestJoinConfirm}
+                />
             </Item>
             {RequestJoinModal}
         </Section>
@@ -271,45 +212,6 @@ const RHSInfoOverview = ({run, role, channel, runMetadata, followState, editable
 };
 
 export default RHSInfoOverview;
-
-interface AddToChannelModalProps {
-    user: UserProfile;
-    channelId: string;
-    setOwner: (id: string) => void;
-    show: boolean;
-    onHide: () => void;
-}
-
-const AddToChannelModal = ({user, channelId, setOwner, show, onHide}: AddToChannelModalProps) => {
-    const dispatch = useDispatch();
-    const {formatMessage} = useIntl();
-    const displayName = useFormattedUsername(user);
-
-    if (!user) {
-        return null;
-    }
-
-    return (
-        <ConfirmModal
-            show={show}
-            title={formatMessage(
-                {defaultMessage: 'Add {displayName} to Channel'},
-                {displayName},
-            )}
-            message={formatMessage(
-                {defaultMessage: '{displayName} is not a participant of the run. Would you like to make them a participant? They will have access to all of the message history in the run channel.'},
-                {displayName},
-            )}
-            confirmButtonText={formatMessage({defaultMessage: 'Add'})}
-            onConfirm={() => {
-                dispatch(addChannelMember(channelId, user.id));
-                setOwner(user.id);
-                onHide();
-            }}
-            onCancel={onHide}
-        />
-    );
-};
 
 interface ItemProps {
     id: string;
@@ -365,7 +267,7 @@ const ItemDisabledContent = styled(ItemContent)`
     color: rgba(var(--center-channel-color-rgb), 0.64);
 `;
 
-const OverviewRow = styled.div<{onClick?: () => void}>`
+const OverviewRow = styled.div<{ onClick?: () => void }>`
     padding: 10px 24px;
     height: 44px;
     display: flex;
@@ -378,11 +280,6 @@ const OverviewRow = styled.div<{onClick?: () => void}>`
     ${({onClick}) => onClick && css`
         cursor: pointer;
     `}
-
-    ${AssignToContainer} {
-        margin-left: 0;
-        max-width: none;
-    }
 `;
 
 const OverviewItemName = styled.div`
@@ -402,19 +299,10 @@ const FollowersWrapper = styled.div`
     align-items: center;
 `;
 
-const FollowButton = styled(TertiaryButton)`
+const RequestJoinButton = styled(TertiaryButton)`
     font-size: 12px;
     height: 24px;
     padding: 0 10px;
-`;
-
-const UnfollowButton = styled(SecondaryButton)`
-    font-size: 12px;
-    height: 24px;
-    padding: 0 10px;
-    `;
-
-const RequestJoinButton = styled(FollowButton)`
     margin-right: 10px;
 `;
 
@@ -423,3 +311,47 @@ const ParticipantsContainer = styled.div`
     flex-direction: row;
     align-items: center;
 `;
+
+interface ChannelRowProps {
+    channel: Channel | undefined | null;
+    channelDeleted: boolean;
+    runMetadata?: Metadata;
+    role: Role;
+    onClickRequestJoin: () => void;
+}
+
+const ChannelRow = ({channel, runMetadata, channelDeleted, role, onClickRequestJoin}: ChannelRowProps) => {
+    const {formatMessage} = useIntl();
+
+    if (channelDeleted) {
+        return (
+            <ItemDisabledContent>
+                {formatMessage({defaultMessage: 'Channel deleted'})}
+            </ItemDisabledContent>
+        );
+    }
+
+    if (channel && runMetadata) {
+        return (
+            <ItemLink
+                to={`/${runMetadata.team_name}/channels/${channel.name}`}
+                data-testid='runinfo-channel-link'
+            >
+                <ItemContent>
+                    {channel.display_name}
+                </ItemContent>
+                <OpenInNewIcon
+                    size={14}
+                    color={'var(--button-bg)'}
+                />
+            </ItemLink>
+        );
+    }
+
+    return (
+        <ItemDisabledContent>
+            {role === Role.Participant ? <RequestJoinButton onClick={onClickRequestJoin}>{formatMessage({defaultMessage: 'Request to Join'})}</RequestJoinButton> : null}
+            <LockOutlineIcon size={20}/> {formatMessage({defaultMessage: 'Private'})}
+        </ItemDisabledContent>
+    );
+};

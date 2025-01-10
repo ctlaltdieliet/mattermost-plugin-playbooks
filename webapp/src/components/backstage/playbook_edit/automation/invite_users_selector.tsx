@@ -1,10 +1,6 @@
-import React, {useState, useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {useSelector} from 'react-redux';
-import ReactSelect, {
-    GroupType,
-    ControlProps,
-    OptionsType,
-} from 'react-select';
+import ReactSelect, {ControlProps, GroupType, OptionsType} from 'react-select';
 
 import styled from 'styled-components';
 import {ActionFunc} from 'mattermost-redux/types/actions';
@@ -22,7 +18,7 @@ import MenuList from 'src/components/backstage/playbook_edit/automation/menu_lis
 interface Props {
     userIds: string[];
     onAddUser: (userid: string) => void;
-    onRemoveUser: (userid: string) => void;
+    onRemoveUser: (userid: string, username: string) => void;
     searchProfiles: (term: string) => ActionFunc;
     getProfiles: () => ActionFunc;
     isDisabled: boolean;
@@ -76,15 +72,15 @@ const InviteUsersSelector = (props: Props) => {
     let options: UserProfile[] | GroupType<UserProfile>[] = nonInvitedProfiles;
     if (invitedProfiles.length !== 0) {
         options = [
-            {label: 'INVITED MEMBERS', options: invitedProfiles},
-            {label: 'NON INVITED MEMBERS', options: nonInvitedProfiles},
+            {label: 'SELECTED', options: invitedProfiles},
+            {label: 'ALL', options: nonInvitedProfiles},
         ];
     }
 
     let badgeContent = '';
     const numInvitedMembers = props.userIds.length;
     if (numInvitedMembers > 0) {
-        badgeContent = `${numInvitedMembers} MEMBER${numInvitedMembers > 1 ? 'S' : ''}`;
+        badgeContent = `${numInvitedMembers} SELECTED`;
     }
 
     // Type guard to check whether the current options is a group or a plain list
@@ -106,7 +102,7 @@ const InviteUsersSelector = (props: Props) => {
             getOptionValue={(user: UserProfile) => user.id}
             formatOptionLabel={(option: UserProfile) => (
                 <UserLabel
-                    onRemove={() => props.onRemoveUser(option.id)}
+                    onRemove={() => props.onRemoveUser(option.id, option.username)}
                     id={option.id}
                     invitedUsers={(options.length > 0 && isGroup(options[0])) ? options[0].options : []}
                 />
@@ -114,7 +110,7 @@ const InviteUsersSelector = (props: Props) => {
             defaultMenuIsOpen={false}
             openMenuOnClick={true}
             isClearable={false}
-            placeholder={formatMessage({defaultMessage: 'Search for member'})}
+            placeholder={formatMessage({defaultMessage: 'Search for people'})}
             components={{DropdownIndicator: () => null, IndicatorSeparator: () => null, MenuList}}
             styles={{
                 control: (provided: ControlProps<UserProfile, boolean>) => ({

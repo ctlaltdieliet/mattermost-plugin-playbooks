@@ -1,6 +1,7 @@
 import {useState} from 'react';
 
-import {PlaybookRun} from 'src/types/playbook_run';
+import {PlaybookRun, RunMetricData} from 'src/types/playbook_run';
+import {Checklist, Metric} from 'src/types/playbook';
 
 let idCounter = 0;
 
@@ -106,4 +107,65 @@ export type Resolvable<TVal> = ResolvableFunction<TVal> | TVal;
 
 export function resolve<TVal>(prop: Resolvable<TVal>, ...args: any): TVal {
     return typeof prop === 'function' ? (prop as ResolvableFunction<TVal>)(...args) : prop;
+}
+
+export function getDistinctAssignees(checklists: Checklist[]) {
+    return [
+        ...checklists.reduce((assignees, cl) => {
+            cl.items.forEach((ci) => {
+                if (ci.assignee_id) {
+                    assignees.add(ci.assignee_id);
+                }
+            });
+            return assignees;
+        }, new Set<string>()),
+    ];
+}
+
+export function runCallsSlashCommand(command: string, channelId: string, teamId: string) {
+    window.postMessage({
+        type: 'calls-run-slash-command',
+        message: command,
+        args: {
+            channel_id: channelId,
+            team_id: teamId,
+        },
+    }, window.origin);
+}
+
+export function safeJSONParse<T>(value: unknown): T | null {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return null;
+    }
+}
+
+export function isArrayOf<T>(value: unknown, typeGuard: (value: unknown) => value is T): value is T[] {
+    return Array.isArray(value) && value.every(typeGuard);
+}
+
+export function isMetric(value: unknown): value is Metric {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const metric = value as Metric;
+    return typeof metric.id === 'string' &&
+           typeof metric.title === 'string' &&
+           typeof metric.type === 'string';
+}
+
+export function isMetricData(value: unknown): value is RunMetricData {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const metricData = value as RunMetricData;
+    return typeof metricData.metric_config_id === 'string' &&
+           (typeof metricData.value === 'string' || typeof metricData.value === 'number');
 }

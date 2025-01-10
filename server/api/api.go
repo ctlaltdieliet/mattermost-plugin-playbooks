@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 // MaxRequestSize is the size limit for any incoming request
@@ -41,8 +41,8 @@ func NewHandler(pluginAPI *pluginapi.Client, config config.Service) *Handler {
 	}
 
 	root := mux.NewRouter()
+	root.Use(LogRequest)
 	api := root.PathPrefix("/api/v0").Subrouter()
-	api.Use(LogRequest)
 	api.Use(MattermostAuthorizationRequired)
 
 	api.Handle("{anything:.*}", http.NotFoundHandler())
@@ -92,16 +92,10 @@ func HandleErrorWithCode(logger logrus.FieldLogger, w http.ResponseWriter, code 
 
 // ReturnJSON writes the given pointerToObject as json with the provided httpStatus
 func ReturnJSON(w http.ResponseWriter, pointerToObject interface{}, httpStatus int) {
-	jsonBytes, err := json.Marshal(pointerToObject)
-	if err != nil {
-		logrus.WithError(err).Error("Unable to marshal JSON")
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpStatus)
 
-	if _, err = w.Write(jsonBytes); err != nil {
+	if err := json.NewEncoder(w).Encode(pointerToObject); err != nil {
 		logrus.WithError(err).Warn("Unable to write to http.ResponseWriter")
 		return
 	}

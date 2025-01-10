@@ -8,11 +8,12 @@ import {useSelector} from 'react-redux';
 import {getCurrentUser} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/common';
 import {getCurrentTeamId} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/teams';
 
-import {telemetryEventForTemplate, savePlaybook} from 'src/client';
+import {savePlaybook, telemetryEventForTemplate} from 'src/client';
 import {StyledSelect} from 'src/components/backstage/styles';
 import {setPlaybookDefaults} from 'src/types/playbook';
 import {usePlaybooksRouting} from 'src/hooks';
-import {useLHSRefresh} from '../backstage/lhs_navigation';
+
+import {useLHSRefresh} from 'src/components/backstage/lhs_navigation';
 
 import TemplateItem from './template_item';
 import PresetTemplates, {PresetTemplate} from './template_data';
@@ -51,7 +52,7 @@ export const TemplateDropdown = (props: TemplateDropdownProps) => {
 
 const SelectorGrid = styled.div`
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
     gap: 2.5rem;
     place-items: flex-start center;
     padding: 0 0 100px;

@@ -7,60 +7,65 @@ import {useDispatch, useSelector} from 'react-redux';
 import {Link} from 'react-router-dom';
 
 import {
-    PlusIcon,
-    CloseIcon,
-    ArchiveOutlineIcon,
-    ExportVariantIcon,
-    ContentCopyIcon,
-    PencilOutlineIcon,
     AccountMultipleOutlineIcon,
-    StarOutlineIcon,
-    StarIcon,
+    ArchiveOutlineIcon,
+    CloseIcon,
+    ContentCopyIcon,
+    ExportVariantIcon,
     LinkVariantIcon,
-    RestoreIcon,
+    LockOutlineIcon,
+    PencilOutlineIcon,
     PlayOutlineIcon,
+    PlusIcon,
+    RestoreIcon,
+    StarIcon,
+    StarOutlineIcon,
 } from '@mattermost/compass-icons/components';
 
-import {Tooltip, OverlayTrigger} from 'react-bootstrap';
+import {OverlayTrigger, Tooltip} from 'react-bootstrap';
 
 import {getTeam} from 'mattermost-redux/selectors/entities/teams';
 import {Team} from '@mattermost/types/teams';
 import {GlobalState} from '@mattermost/types/store';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-
 import {FormattedMessage, FormattedNumber, useIntl} from 'react-intl';
-
 import {createGlobalState} from 'react-use';
 
-import {pluginUrl, navigateToPluginUrl} from 'src/browser_routing';
-import {PlaybookPermissionsMember, useHasPlaybookPermission, useHasTeamPermission} from 'src/hooks';
-import {useToaster} from '../toast_banner';
-
+import {navigateToPluginUrl, pluginUrl} from 'src/browser_routing';
 import {
-    duplicatePlaybook as clientDuplicatePlaybook,
+    PlaybookPermissionsMember,
+    useAllowMakePlaybookPrivate,
+    useHasPlaybookPermission,
+    useHasTeamPermission,
+} from 'src/hooks';
+import {useToaster} from 'src/components/backstage/toast_banner';
+import {
+    archivePlaybook,
     autoFollowPlaybook,
     autoUnfollowPlaybook,
-    telemetryEventForPlaybook,
-    playbookExportProps,
-    archivePlaybook,
+    duplicatePlaybook as clientDuplicatePlaybook,
     clientFetchPlaybookFollowers,
     getSiteUrl,
+    playbookExportProps,
     restorePlaybook,
+    telemetryEvent,
+    telemetryEventForPlaybook,
 } from 'src/client';
 import {OVERLAY_DELAY} from 'src/constants';
-import {ButtonIcon, PrimaryButton, SecondaryButton, TertiaryButton} from 'src/components/assets/buttons';
-import CheckboxInput from '../runs_list/checkbox_input';
-
+import {ButtonIcon, PrimaryButton, SecondaryButton} from 'src/components/assets/buttons';
+import CheckboxInput from 'src/components/backstage/runs_list/checkbox_input';
 import {displayEditPlaybookAccessModal, openPlaybookRunModal} from 'src/actions';
 import {PlaybookPermissionGeneral} from 'src/types/permissions';
 import DotMenu, {DropdownMenuItem as DropdownMenuItemBase, DropdownMenuItemStyled, iconSplitStyling} from 'src/components/dot_menu';
-import useConfirmPlaybookArchiveModal from '../archive_playbook_modal';
+import useConfirmPlaybookArchiveModal from 'src/components/backstage/archive_playbook_modal';
 import CopyLink from 'src/components/widgets/copy_link';
-import useConfirmPlaybookRestoreModal from '../restore_playbook_modal';
-import {usePlaybookMembership, useUpdatePlaybook} from 'src/graphql/hooks';
-import {StyledDropdownMenuItem} from '../shared';
+import useConfirmPlaybookRestoreModal from 'src/components/backstage/restore_playbook_modal';
+import {usePlaybookMembership, useUpdatePlaybookFavorite} from 'src/graphql/hooks';
+import {StyledDropdownMenuItem} from 'src/components/backstage/shared';
 import {copyToClipboard} from 'src/utils';
-import {useLHSRefresh} from '../lhs_navigation';
+import {useLHSRefresh} from 'src/components/backstage/lhs_navigation';
+import useConfirmPlaybookConvertPrivateModal from 'src/components/backstage/convert_private_playbook_modal';
+import {PlaybookRunEventTarget} from 'src/types/telemetry';
 
 type ControlProps = {
     playbook: {
@@ -228,7 +233,7 @@ export const AutoFollowToggle = ({playbook}: ControlProps) => {
                 <div>
                     <CheckboxInputStyled
                         testId={'auto-follow-runs'}
-                        text={'Auto-follow runs'}
+                        text={formatMessage({defaultMessage: 'Auto-follow runs'})}
                         checked={isFollowing}
                         disabled={archived}
                         onChange={setFollowing}
@@ -250,18 +255,18 @@ export const RunPlaybook = ({playbook}: ControlProps) => {
     const hasPermissionToRunPlaybook = useHasPlaybookPermission(PlaybookPermissionGeneral.RunCreate, playbook);
     const enableRunPlaybook = playbook.delete_at === 0 && hasPermissionToRunPlaybook;
     const refreshLHS = useLHSRefresh();
-
     return (
         <PrimaryButtonLarger
             onClick={() => {
-                dispatch(openPlaybookRunModal(
-                    playbook.id,
-                    playbook.default_owner_enabled ? playbook.default_owner_id : null,
-                    playbook.description,
-                    team.id,
-                    team.name,
-                    refreshLHS
-                ));
+                dispatch(openPlaybookRunModal({
+                    onRunCreated: (runId, channelId, statsData) => {
+                        navigateToPluginUrl(`/runs/${runId}?from=run_modal`);
+                        refreshLHS();
+                        telemetryEvent(PlaybookRunEventTarget.Create, {...statsData, place: 'backstage_playbook_editor'});
+                    },
+                    playbookId: playbook.id,
+                    teamId: team.id,
+                }));
             }}
             disabled={!enableRunPlaybook}
             title={enableRunPlaybook ? formatMessage({defaultMessage: 'Run Playbook'}) : formatMessage({defaultMessage: 'You do not have permissions'})}
@@ -300,12 +305,10 @@ export const JoinPlaybook = ({playbook: {id: playbookId}, refetch}: ControlProps
 
 export const FavoritePlaybookMenuItem = (props: {playbookId: string, isFavorite: boolean}) => {
     const {formatMessage} = useIntl();
-    const refreshLHS = useLHSRefresh();
-    const updatePlaybook = useUpdatePlaybook(props.playbookId);
+    const updatePlaybookFavorite = useUpdatePlaybookFavorite(props.playbookId);
 
     const toggleFavorite = async () => {
-        await updatePlaybook({isFavorite: !props.isFavorite});
-        refreshLHS();
+        await updatePlaybookFavorite(!props.isFavorite);
     };
     return (
         <StyledDropdownMenuItem onClick={toggleFavorite}>
@@ -326,7 +329,7 @@ export const CopyPlaybookLinkMenuItem = (props: {playbookId: string}) => {
         <StyledDropdownMenuItem
             onClick={() => {
                 copyToClipboard(getSiteUrl() + '/playbooks/playbooks/' + props.playbookId);
-                addToast(formatMessage({defaultMessage: 'Copied!'}));
+                addToast({content: formatMessage({defaultMessage: 'Copied!'})});
             }}
         >
             <LinkVariantIcon size={18}/>
@@ -372,7 +375,9 @@ const TitleMenuImpl = ({playbook, children, className, editTitle, refetch}: Titl
         }
     });
     const [confirmRestoreModal, openConfirmRestoreModal] = useConfirmPlaybookRestoreModal((playbookId: string) => restorePlaybook(playbookId));
+    const [confirmConvertPrivateModal, setShowMakePrivateConfirm] = useConfirmPlaybookConvertPrivateModal({playbookId: playbook.id, refetch});
 
+    const refreshLHS = useLHSRefresh();
     const {add: addToast} = useToaster();
 
     const currentUserId = useSelector(getCurrentUserId);
@@ -381,6 +386,9 @@ const TitleMenuImpl = ({playbook, children, className, editTitle, refetch}: Titl
     const currentUserMember = useMemo(() => playbook?.members.find(({user_id}) => user_id === currentUserId), [playbook?.members, currentUserId]);
 
     const permissionForDuplicate = useHasTeamPermission(playbook.team_id, 'playbook_public_create');
+    const permissionToMakePrivate = useHasPlaybookPermission(PlaybookPermissionGeneral.Convert, playbook);
+    const licenseToMakePrivate = useAllowMakePlaybookPrivate();
+    const isEligibleToMakePrivate = currentUserMember && playbook.public && permissionToMakePrivate && licenseToMakePrivate;
 
     const {leave} = usePlaybookMembership(playbook.id, currentUserId);
 
@@ -421,7 +429,8 @@ const TitleMenuImpl = ({playbook, children, className, editTitle, refetch}: Titl
                     onClick={async () => {
                         const newID = await clientDuplicatePlaybook(playbook.id);
                         navigateToPluginUrl(`/playbooks/${newID}/outline`);
-                        addToast(formatMessage({defaultMessage: 'Successfully duplicated playbook'}));
+                        addToast({content: formatMessage({defaultMessage: 'Successfully duplicated playbook'})});
+                        refreshLHS();
                         telemetryEventForPlaybook(playbook.id, 'playbook_duplicate_clicked_in_playbook');
                     }}
                     disabled={!permissionForDuplicate}
@@ -440,6 +449,20 @@ const TitleMenuImpl = ({playbook, children, className, editTitle, refetch}: Titl
                     <ExportVariantIcon size={18}/>
                     <FormattedMessage defaultMessage='Export'/>
                 </DropdownMenuItemStyled>
+                {isEligibleToMakePrivate && (
+                    <DropdownMenuItemStyled
+                        role={'button'}
+                        css={`${iconSplitStyling}`}
+                        onClick={() => {
+                            telemetryEventForPlaybook(playbook.id, 'playbook_makeprivate');
+                            setShowMakePrivateConfirm(true);
+                        }}
+                    >
+                        <LockOutlineIcon size={18}/>
+                        <FormattedMessage defaultMessage='Convert to private playbook'/>
+                    </DropdownMenuItemStyled>
+                )
+                }
                 {currentUserMember && (
                     <>
                         <div className='MenuGroup menu-divider'/>
@@ -475,6 +498,7 @@ const TitleMenuImpl = ({playbook, children, className, editTitle, refetch}: Titl
             </DotMenu>
             {confirmArchiveModal}
             {confirmRestoreModal}
+            {confirmConvertPrivateModal}
         </>
     );
 };
@@ -503,11 +527,7 @@ const PrimaryButtonLarger = styled(PrimaryButton)`
     ${buttonCommon};
 `;
 
-const SecondaryButtonLarger = styled(SecondaryButton)`
-    ${buttonCommon};
-`;
-
-const TertiaryButtonLarger = styled(TertiaryButton)`
+export const SecondaryButtonLarger = styled(SecondaryButton)`
     ${buttonCommon};
 `;
 

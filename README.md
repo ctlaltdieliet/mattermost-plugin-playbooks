@@ -1,10 +1,8 @@
 # Mattermost Playbooks
 
-[![Build Status](https://img.shields.io/circleci/project/github/mattermost/mattermost-plugin-playbooks/master.svg)](https://circleci.com/gh/mattermost/mattermost-plugin-playbooks)
-[![Code Coverage](https://img.shields.io/codecov/c/github/mattermost/mattermost-plugin-playbooks/master.svg)](https://codecov.io/gh/mattermost/mattermost-plugin-playbooks)
 [![Release](https://img.shields.io/github/v/release/mattermost/mattermost-plugin-playbooks)](https://github.com/mattermost/mattermost-plugin-playbooks/releases/latest)
 
-Mattermost Playbooks allows your team to create and run playbooks from within Mattermost. For configuration and administration information visit our [documentation](https://docs.mattermost.com/administration/devops-command-center.html).
+Mattermost Playbooks allows your team to create and run playbooks from within Mattermost. For configuration and administration information visit our [documentation](https://docs.mattermost.com/guides/playbooks.html).
 
 ![Mattermost Playbooks](assets/incident_response.png)
 
@@ -31,12 +29,6 @@ Although a valid Mattermost Enterprise license is required to access all feature
 
 If you're running Mattermost Starter and don't already have a valid license, you can obtain a trial license from **System Console > Edition and License**. If you're running the Team Edition of Mattermost, including when you run the server directly from source, you may instead configure your server to enable both testing (`ServiceSettings.EnableTesting`) and developer mode (`ServiceSettings.EnableDeveloper`). These settings are not recommended in production environments. See [Contributing](#contributing) to learn more about how to set up your development environment.
 
-## Updating documentation
-
-When you've submitted a PR that requires a documentation update, please visit the documentation [here](https://docs.mattermost.com/administration/devops-command-center.html), select **Edit** in the top-right corner of the page, and add your update. You can read more about the process in the [docs repo README file](https://github.com/mattermost/docs).
-
-If you're uncertain whether your PR requires documentation, or you'd like some editorial feedback prior to submitting the docs PR, you can add the `Docs/Needed` label to your PR in this repo, and tag @justinegeffen.
-
 ## Generating test data
 
 To quickly test Mattermost Playbooks, use the following test commands to create playbook runs populated with random data:
@@ -57,11 +49,52 @@ To quickly test Mattermost Playbooks, use the following test commands to create 
 
 When running E2E tests, the local `mattermost-server` configuration may be unexpectedly modified if either `on_prem_default_config.json` or `cloud_default_default_config.json` (depending on the server edition) has conflicting values for the same keys. This can be avoided by setting `CYPRESS_developerMode=true` when calling Cypress scripts. For example: `CYPRESS_developerMode=true npm run cypress:open`.
 
+## How to Release
+
+To trigger a release, follow these steps:
+
+1. **For Patch Release:** Run the following command:
+    ```
+    make patch
+    ```
+   This will release a patch change.
+
+2. **For Minor Release:** Run the following command:
+    ```
+    make minor
+    ```
+   This will release a minor change.
+
+3. **For Major Release:** Run the following command:
+    ```
+    make major
+    ```
+   This will release a major change.
+
+4. **For Patch Release Candidate (RC):** Run the following command:
+    ```
+    make patch-rc
+    ```
+   This will release a patch release candidate.
+
+5. **For Minor Release Candidate (RC):** Run the following command:
+    ```
+    make minor-rc
+    ```
+   This will release a minor release candidate.
+
+6. **For Major Release Candidate (RC):** Run the following command:
+    ```
+    make major-rc
+    ```
+   This will release a major release candidate.
+
+
 ## Contributing
 
 This plugin contains both a server and web app portion. Read our documentation about the [Developer Workflow](https://developers.mattermost.com/extend/plugins/developer-workflow/) and [Developer Setup](https://developers.mattermost.com/extend/plugins/developer-setup/) for more information about developing and extending plugins.
 
-For more information about contributing to Mattermost, and the different ways you can contribute, see https://www.mattermost.org/contribute-to-mattermost.
+For more information about contributing to Mattermost, and the different ways you can contribute, see [https://www.mattermost.org/contribute-to-mattermost](https://mattermost.com/contribute/?redirect_source=mm-org).
 
 ### Logging
 
@@ -91,9 +124,17 @@ A few guidelines when logging:
 * Use `WithFields` when passing more than one field that is not an `err`.
 * Common fields can be set once instead of being passed for every log
 
+### DB Migrations
+
+DB migrations should be placed in `sqlstore/migrations.go` as they are the ones being run at the moment.
+
+After transitioning to a new migration schema, the `sqlstore/migrations/future` folder will be utilised.
+It would ease the transition if migrations are also added there for both drivers (mysql, postgres).
+All migrations in the `future` folder should have both migration directions - `up` and `down`.
+
 ## Popular searches for Help Wanted issues:
 
-* [Help wanted tickets currently up for grab](https://github.com/mattermost/mattermost-server/issues?q=is%3Aopen+is%3Aissue+label%3AArea%2FPlaybooks+label%3A%22Up+For+Grabs%22)
-* [Good first issue tickets](https://github.com/mattermost/mattermost-server/issues?q=is%3Aopen+is%3Aissue+label%3AArea%2FPlaybooks+label%3A%22Good+First+Issue%22+label%3A%22Up+For+Grabs%22)
+* [Help wanted tickets currently up for grab]([https://github.com/mattermost/mattermost-server/issues?q=is%3Aopen+is%3Aissue+label%3AArea%2FPlaybooks+label%3A%22Up+For+Grabs%22](https://github.com/mattermost/mattermost-plugin-playbooks/issues?q=is%3Aopen+is%3Aissue+label%3A%22Help+Wanted%22+label%3A%22Up+For+Grabs%22))
+* [Good first issue tickets]([https://github.com/mattermost/mattermost-server/issues?q=is%3Aopen+is%3Aissue+label%3AArea%2FPlaybooks+label%3A%22Good+First+Issue%22+label%3A%22Up+For+Grabs%22](https://github.com/mattermost/mattermost-plugin-playbooks/issues?q=is%3Aopen+is%3Aissue+label%3A%22Good+First+Issue%22))
 
 For more information, join the discussion in the [`Developers: Playbooks` channel](https://community.mattermost.com/core/channels/developers-playbooks).

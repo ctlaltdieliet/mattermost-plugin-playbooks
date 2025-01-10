@@ -13,12 +13,18 @@ type Query {
 	runs(
 		teamID: String = "",
 		sort: String = "",
+		direction: String = "",
 		statuses: [String!] = [],
 		participantOrFollowerID: String = "",
-	): [Run!]!
+		channelID: String = "",
+		first: Int,
+		after: String,
+		types: [PlaybookRunType!] = [],
+	): RunConnection!
 }
 
 type Mutation {
+	updatePlaybookFavorite(id: String!, favorite: Boolean!): String!
 	updatePlaybook(id: String!, updates: PlaybookUpdates!): String!
 
 	addMetric(playbookID: String!, title: String!, description: String!, type: String!, target: Int): String!
@@ -28,10 +34,18 @@ type Mutation {
 	addPlaybookMember(playbookID: String!, userID: String!): String!
 	removePlaybookMember(playbookID: String!, userID: String!): String!
 
+	setRunFavorite(id: String!, fav: Boolean!): String!
 	updateRun(id: String!, updates: RunUpdates!): String!
-	addRunParticipants(runID: String!, userIDs: [String!]!): String!
+	addRunParticipants(runID: String!, userIDs: [String!]!, forceAddToChannel: Boolean = false): String!
 	removeRunParticipants(runID: String!, userIDs: [String!]!): String!
 	changeRunOwner(runID: String!, ownerID: String!): String!
+	updateRunTaskActions(runID: String!, checklistNum: Float!, itemNum: Float!, taskActions: [TaskActionUpdates!]): String!
+}
+
+type PageInfo {
+	hasNextPage: Boolean!
+	startCursor: String!
+	endCursor: String!
 }
 
 input PlaybookUpdates {
@@ -66,7 +80,10 @@ input PlaybookUpdates {
 	runSummaryTemplate: String
 	channelNameTemplate: String
 	checklists: [ChecklistUpdates!]
-	isFavorite: Boolean
+	createChannelMemberOnNewParticipant: Boolean
+	removeChannelMemberOnRemovedParticipant: Boolean
+	channelId: String
+	channelMode: String
 }
 
 input ChecklistUpdates {
@@ -84,6 +101,22 @@ input ChecklistItemUpdates {
 	command: String!
 	commandLastRun: Float!
 	dueDate: Float!
+	taskActions: [TaskActionUpdates!]
+}
+
+input TaskActionUpdates {
+	trigger: TriggerUpdates!
+	actions: [ActionUpdates!]!
+}
+
+input TriggerUpdates {
+	type: String!
+	payload: String!
+}
+
+input ActionUpdates {
+	type: String!
+	payload: String!
 }
 
 type Playbook {
@@ -93,6 +126,9 @@ type Playbook {
 	teamID: String!
 	createPublicPlaybookRun: Boolean!
 	deleteAt: Float!
+	lastRunAt: Float!
+	numRuns: Int!
+	activeRuns: Int!
 	runSummaryTemplateEnabled: Boolean!
 	defaultPlaybookMemberRole: String!
 	public: Boolean!
@@ -130,6 +166,10 @@ type Playbook {
 	defaultRunMemberRole: String!
 	metrics: [PlaybookMetricConfig!]!
 	isFavorite: Boolean!
+	createChannelMemberOnNewParticipant: Boolean!
+	removeChannelMemberOnRemovedParticipant: Boolean!
+	channelID: String!
+	channelMode: String!
 }
 
 type Checklist {
@@ -153,6 +193,22 @@ type ChecklistItem {
 	command: String!
 	commandLastRun: Float!
 	dueDate: Float!
+	taskActions: [TaskAction!]!
+}
+
+type TaskAction {
+	trigger: Trigger!
+	actions: [Action!]!
+}
+
+type Trigger {
+	type: String!
+	payload: String!
+}
+
+type Action {
+	type: String!
+	payload: String!
 }
 
 enum MetricType {
@@ -169,9 +225,15 @@ type PlaybookMetricConfig {
 	target: Int
 }
 
+enum PlaybookRunType {
+	playbook
+	channelChecklist
+}
+
 type Run {
 	id: String!
 	playbookID: String!
+	playbook: Playbook
 	name: String!
 	ownerUserID: String!
 	channelID: String!
@@ -206,9 +268,29 @@ type Run {
 	statusUpdateBroadcastWebhooksEnabled: Boolean!
 	broadcastChannelIDs: [String!]!
 	webhookOnStatusUpdateURLs: [String!]!
+	createChannelMemberOnNewParticipant: Boolean!
+	removeChannelMemberOnRemovedParticipant: Boolean!
+
+	lastUpdatedAt: Float!
 
 	timelineEvents: [TimelineEvent!]!
-	metadata: Metadata!
+	followers: [String!]!
+
+	numTasks: Int!
+	numTasksClosed: Int!
+
+	type: PlaybookRunType!
+}
+
+type RunConnection {
+	totalCount: Int!
+	edges: [RunEdge!]!
+	pageInfo: PageInfo!
+}
+
+type RunEdge {
+	cursor: String!
+	node: Run!
 }
 
 type StatusPost {
@@ -230,9 +312,13 @@ type TimelineEvent {
 }
 
 input RunUpdates {
-	isFavorite: Boolean
-}
-
-type Metadata {
-	followers: [String!]!
+	name: String
+	summary: String
+	createChannelMemberOnNewParticipant: Boolean
+	removeChannelMemberOnRemovedParticipant: Boolean
+	statusUpdateBroadcastChannelsEnabled: Boolean
+	statusUpdateBroadcastWebhooksEnabled: Boolean
+	broadcastChannelIDs: [String!]
+	webhookOnStatusUpdateURLs: [String!]
+	channelID: String
 }

@@ -3,9 +3,9 @@
 
 import React from 'react';
 
-import Svg from '../svg';
+import Svg from 'src/components/assets/svg';
 
-const Rocket = (props: {className?: string}) => (
+const Rocket = () => (
     <Svg
         width='60'
         height='68'

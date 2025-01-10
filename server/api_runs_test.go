@@ -8,16 +8,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattermost/mattermost-plugin-playbooks/client"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/client"
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 )
 
 func TestRunCreation(t *testing.T) {
 	e := Setup(t)
 	e.CreateBasic()
+
+	incompletePlaybookID, err := e.PlaybooksAdminClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+		Title:  "TestPlaybook",
+		TeamID: e.BasicTeam.Id,
+		Public: true,
+		Members: []client.PlaybookMember{
+			{UserID: e.RegularUser.Id, Roles: []string{app.PlaybookRoleMember}},
+			{UserID: e.AdminUser.Id, Roles: []string{app.PlaybookRoleAdmin, app.PlaybookRoleMember}},
+		},
+		ChannelMode: client.PlaybookRunLinkExistingChannel,
+		ChannelID:   "",
+	})
+	require.NoError(t, err)
 
 	t.Run("dialog requests", func(t *testing.T) {
 		for name, tc := range map[string]struct {
@@ -144,6 +159,21 @@ func TestRunCreation(t *testing.T) {
 					assert.Equal(t, http.StatusBadRequest, result.StatusCode)
 				},
 			},
+			"invalid: missing channelid": {
+				dialogRequest: model.SubmitDialogRequest{
+					TeamId: e.BasicTeam.Id,
+					UserId: e.RegularUser.Id,
+					State:  "{}",
+					Submission: map[string]interface{}{
+						app.DialogFieldPlaybookIDKey: incompletePlaybookID,
+						app.DialogFieldNameKey:       "run number 1",
+					},
+				},
+				expected: func(t *testing.T, result *http.Response, err error) {
+					require.Error(t, err)
+					assert.Equal(t, http.StatusBadRequest, result.StatusCode)
+				},
+			},
 		} {
 			t.Run(name, func(t *testing.T) {
 				dialogRequestBytes, err := json.Marshal(tc.dialogRequest)
@@ -157,7 +187,7 @@ func TestRunCreation(t *testing.T) {
 					tc.permissionsPrep()
 				}
 
-				result, err := e.ServerClient.DoAPIRequestBytes("POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/dialog", dialogRequestBytes, "")
+				result, err := e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/dialog", dialogRequestBytes, "")
 				tc.expected(t, result, err)
 			})
 		}
@@ -281,6 +311,107 @@ func TestRunCreation(t *testing.T) {
 	})
 }
 
+func TestCreateRunInExistingChannel(t *testing.T) {
+	e := Setup(t)
+	e.CreateBasic()
+
+	// create playbook
+	playbookID, err := e.PlaybooksAdminClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+		Public:      true,
+		Title:       "PB",
+		TeamID:      e.BasicTeam.Id,
+		ChannelMode: client.PlaybookRunLinkExistingChannel,
+		ChannelID:   e.BasicPublicChannel.Id,
+	})
+	assert.NoError(t, err)
+
+	t.Run("create a run", func(t *testing.T) {
+		// create a run, pass the channel id from the playbook configuration
+		run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "run in existing channel",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  playbookID,
+			ChannelID:   e.BasicPublicChannel.Id,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, run)
+		assert.Equal(t, e.BasicPublicChannel.Id, run.ChannelID)
+
+		// Verify user was not promoted to admin
+		member, _, err := e.ServerAdminClient.GetChannelMember(context.Background(), e.BasicPublicChannel.Id, e.RegularUser.Id, "")
+		require.NoError(t, err)
+		assert.NotContains(t, member.Roles, model.ChannelAdminRoleId)
+
+	})
+
+	t.Run("no access to the linked channel", func(t *testing.T) {
+		// create a run, pass the channel id from the playbook configuration
+		run, err := e.PlaybooksClient2.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "run in existing channel",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  playbookID,
+			ChannelID:   e.BasicPublicChannel.Id,
+		})
+
+		// PlaybooksClient2 is not a channel member, so should not be able to start a run
+		assert.Error(t, err)
+		assert.Nil(t, run)
+	})
+
+	t.Run("create a run, pass a channel different from the playbook configs", func(t *testing.T) {
+		// create private channel
+		privateChannel, _, err := e.ServerAdminClient.CreateChannel(context.Background(), &model.Channel{
+			DisplayName: "test_private",
+			Name:        "test_private",
+			Type:        model.ChannelTypePrivate,
+			TeamId:      e.BasicTeam.Id,
+		})
+		require.NoError(e.T, err)
+		_, _, err = e.ServerAdminClient.AddChannelMember(context.Background(), privateChannel.Id, e.RegularUser.Id)
+		require.NoError(e.T, err)
+
+		// create a run, pass the channel id different from the playbook configs
+		run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "run in existing channel",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  playbookID,
+			ChannelID:   privateChannel.Id,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, run)
+		assert.Equal(t, privateChannel.Id, run.ChannelID)
+	})
+
+	t.Run("create a run using dialog requests", func(t *testing.T) {
+		dialogRequest := model.SubmitDialogRequest{
+			TeamId: e.BasicTeam.Id,
+			UserId: e.RegularUser.Id,
+			State:  "{}",
+			Submission: map[string]interface{}{
+				app.DialogFieldPlaybookIDKey: playbookID,
+				app.DialogFieldNameKey:       "run number 1",
+			},
+		}
+		dialogRequestBytes, err := json.Marshal(dialogRequest)
+		assert.NoError(t, err)
+
+		result, err := e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/dialog", dialogRequestBytes, "")
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, result.StatusCode)
+
+		url, err := result.Location()
+		assert.NoError(t, err)
+		runID := url.Path[strings.LastIndex(url.Path, "/")+1:]
+		run, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), runID)
+		assert.NoError(t, err)
+		assert.Equal(t, e.BasicPublicChannel.Id, run.ChannelID)
+	})
+}
+
 func TestCreateInvalidRuns(t *testing.T) {
 	e := Setup(t)
 	e.CreateBasic()
@@ -295,6 +426,19 @@ func TestCreateInvalidRuns(t *testing.T) {
 		})
 		requireErrorWithStatusCode(t, err, http.StatusInternalServerError)
 		assert.Nil(t, run)
+	})
+
+	t.Run("checklist title way too long", func(t *testing.T) {
+		run := e.BasicRun
+		require.Len(t, run.Checklists, 0)
+
+		// Create a valid checklist
+		err := e.PlaybooksClient.PlaybookRuns.CreateChecklist(context.Background(), run.ID, client.Checklist{
+			Title: strings.Repeat("T", 257*1024),
+			Items: []client.ChecklistItem{},
+		})
+		t.Logf("Error: %v", err)
+		require.Error(t, err)
 	})
 }
 
@@ -318,7 +462,7 @@ func TestRunRetrieval(t *testing.T) {
 		list, err := e.PlaybooksAdminClient.PlaybookRuns.List(context.Background(), 0, 100, client.PlaybookRunListOptions{
 			TeamID: e.BasicTeam2.Id,
 		})
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Len(t, list.Items, 0)
 	})
 
@@ -336,44 +480,164 @@ func TestRunRetrieval(t *testing.T) {
 		list, err := e.PlaybooksAdminClient.PlaybookRuns.List(context.Background(), 0, 100, client.PlaybookRunListOptions{
 			TeamID: e.BasicTeam.Id,
 		})
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Len(t, list.Items, 2)
 
 		list, err = e.PlaybooksAdminClient.PlaybookRuns.List(context.Background(), 0, 100, client.PlaybookRunListOptions{
 			TeamID:   e.BasicTeam.Id,
 			Statuses: []client.Status{client.StatusInProgress},
 		})
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Len(t, list.Items, 1)
 
 		list, err = e.PlaybooksAdminClient.PlaybookRuns.List(context.Background(), 0, 100, client.PlaybookRunListOptions{
 			TeamID:  e.BasicTeam.Id,
 			OwnerID: e.RegularUser.Id,
 		})
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Len(t, list.Items, 1)
 	})
 
 	t.Run("checklist autocomplete", func(t *testing.T) {
-		resp, err := e.ServerClient.DoAPIRequest("GET", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/checklist-autocomplete?channel_id="+e.BasicPrivateChannel.Id, "", "")
+		resp, err := e.ServerClient.DoAPIRequest(context.Background(), "GET", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/checklist-autocomplete?channel_id="+e.BasicPrivateChannel.Id, "", "")
 		assert.Error(t, err)
-		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 
+	t.Run("can't get cross team", func(t *testing.T) {
+		_, err := e.PlaybooksClientNotInTeam.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+		requireErrorWithStatusCode(t, err, http.StatusForbidden)
+	})
+
+	t.Run("can't list cross team", func(t *testing.T) {
+		list, err := e.PlaybooksClient.PlaybookRuns.List(context.Background(), 0, 100, client.PlaybookRunListOptions{
+			TeamID: e.BasicTeam.Id,
+		})
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(list.Items), 1)
+		list2, err2 := e.PlaybooksClientNotInTeam.PlaybookRuns.List(context.Background(), 0, 100, client.PlaybookRunListOptions{
+			TeamID: e.BasicTeam.Id,
+		})
+		assert.NoError(t, err2)
+		assert.Len(t, list2.Items, 0)
+	})
 }
 
-func TestRunStatus(t *testing.T) {
+func TestRunPostStatusUpdateDialog(t *testing.T) {
 	e := Setup(t)
 	e.CreateBasic()
 
-	t.Run("update", func(t *testing.T) {
+	t.Run("post an update", func(t *testing.T) {
+		dialogRequest := model.SubmitDialogRequest{
+			TeamId: e.BasicTeam.Id,
+			UserId: e.RegularUser.Id,
+			State:  "{}",
+			Submission: map[string]interface{}{
+				app.DialogFieldMessageKey:           "someupdate",
+				app.DialogFieldReminderInSecondsKey: "100000",
+				app.DialogFieldFinishRun:            false,
+			},
+		}
+		dialogRequestBytes, err := json.Marshal(dialogRequest)
+		require.NoError(t, err)
+
+		result, err := e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/"+e.BasicRun.ID+"/update-status-dialog", dialogRequestBytes, "")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, result.StatusCode)
+	})
+
+	t.Run("no permissions to team", func(t *testing.T) {
+		_, err := e.ServerAdminClient.RemoveTeamMember(context.Background(), e.BasicRun.TeamID, e.RegularUser.Id)
+		require.NoError(t, err)
+
+		dialogRequest := model.SubmitDialogRequest{
+			TeamId: e.BasicTeam.Id,
+			UserId: e.RegularUser.Id,
+			State:  "{}",
+			Submission: map[string]interface{}{
+				app.DialogFieldMessageKey:           "someupdate",
+				app.DialogFieldReminderInSecondsKey: "100000",
+				app.DialogFieldFinishRun:            false,
+			},
+		}
+		dialogRequestBytes, err := json.Marshal(dialogRequest)
+		require.NoError(t, err)
+
+		result, err := e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/"+e.BasicRun.ID+"/update-status-dialog", dialogRequestBytes, "")
+		require.Error(t, err)
+		assert.Equal(t, http.StatusForbidden, result.StatusCode)
+
+		_, _, err = e.ServerAdminClient.AddTeamMember(context.Background(), e.BasicRun.TeamID, e.RegularUser.Id)
+		require.NoError(t, err)
+	})
+}
+
+func TestRunPostStatusUpdate(t *testing.T) {
+	e := Setup(t)
+	e.CreateBasic()
+
+	t.Run("post an update", func(t *testing.T) {
 		err := e.PlaybooksClient.PlaybookRuns.UpdateStatus(context.Background(), e.BasicRun.ID, "update", 600)
 		assert.NoError(t, err)
 	})
 
-	t.Run("update empty message", func(t *testing.T) {
+	t.Run("creates a reminder post", func(t *testing.T) {
+		err := e.PlaybooksClient.PlaybookRuns.UpdateStatus(context.Background(), e.BasicRun.ID, "update", 1)
+		assert.NoError(t, err)
+
+		// wait for the scheduler to run the job
+		time.Sleep(2 * time.Second)
+
+		run, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+		assert.Equal(t, 1*time.Second, run.PreviousReminder)
+		assert.NotEmpty(t, run.ReminderPostID)
+		assert.NoError(t, err)
+
+		// post created with expected props
+		post, _, err := e.ServerClient.GetPost(context.Background(), run.ReminderPostID, "")
+		assert.NoError(t, err)
+		assert.Equal(t, run.ID, post.GetProp("playbookRunId"))
+		assert.Equal(t, e.RegularUser.Username, post.GetProp("targetUsername"))
+	})
+
+	t.Run("poar an update with empty message", func(t *testing.T) {
 		err := e.PlaybooksClient.PlaybookRuns.UpdateStatus(context.Background(), e.BasicRun.ID, "  \t  \r ", 600)
 		assert.Error(t, err)
+	})
+
+	t.Run("no permissions to run", func(t *testing.T) {
+		_, err := e.ServerAdminClient.RemoveTeamMember(context.Background(), e.BasicRun.TeamID, e.RegularUser.Id)
+		require.NoError(t, err)
+		err = e.PlaybooksClient.PlaybookRuns.UpdateStatus(context.Background(), e.BasicRun.ID, "update", 600)
+		requireErrorWithStatusCode(t, err, http.StatusForbidden)
+		_, _, err = e.ServerAdminClient.AddTeamMember(context.Background(), e.BasicRun.TeamID, e.RegularUser.Id)
+		require.NoError(t, err)
+	})
+
+	t.Run("no permissions to run", func(t *testing.T) {
+		_, _, err := e.ServerAdminClient.AddChannelMember(context.Background(), e.BasicRun.ChannelID, e.RegularUser2.Id)
+		require.NoError(t, err)
+		err = e.PlaybooksClient2.PlaybookRuns.UpdateStatus(context.Background(), e.BasicRun.ID, "update", 600)
+		requireErrorWithStatusCode(t, err, http.StatusForbidden)
+	})
+
+	t.Run("test no permissions to broadcast channel", func(t *testing.T) {
+		// Create a run with a private channel in the broadcast channels
+		e.BasicPlaybook.BroadcastChannelIDs = []string{e.BasicPrivateChannel.Id}
+		err := e.PlaybooksAdminClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.NoError(t, err)
+		run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "Poison broadcast channel",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  e.BasicPlaybook.ID,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, run)
+
+		// Update should work even when we don't have access to private broadcast channel
+		err = e.PlaybooksClient.PlaybookRuns.UpdateStatus(context.Background(), run.ID, "update", 600)
+		assert.NoError(t, err)
 	})
 }
 
@@ -412,6 +676,18 @@ func TestChecklistManagement(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, editedRun.Checklists, 1)
 		require.Equal(t, title, editedRun.Checklists[0].Title)
+	})
+
+	t.Run("checklist creation - failure: no permissions", func(t *testing.T) {
+		run := createNewRunWithNoChecklists(t)
+		title := "A new checklist"
+
+		// Create a valid, empty checklist
+		err := e.PlaybooksClient2.PlaybookRuns.CreateChecklist(context.Background(), run.ID, client.Checklist{
+			Title: title,
+			Items: []client.ChecklistItem{},
+		})
+		require.Error(t, err)
 	})
 
 	t.Run("checklist creation - success: checklist with items", func(t *testing.T) {
@@ -740,7 +1016,7 @@ func TestChecklistManagement(t *testing.T) {
 			nil,
 		},
 		{
-			"One checklist - invalid source checklist: greater than lenght of checklists",
+			"One checklist - invalid source checklist: greater than length of checklists",
 			[][]string{{"00"}},
 			1, 0, 0, 0,
 			[][]string{},
@@ -768,7 +1044,7 @@ func TestChecklistManagement(t *testing.T) {
 			&ExpectedError{StatusCode: 500},
 		},
 		{
-			"One checklist - invalid source item: greater than lenght of items",
+			"One checklist - invalid source item: greater than length of items",
 			[][]string{{"00"}},
 			0, 1, 0, 0,
 			[][]string{},
@@ -1005,46 +1281,93 @@ func TestChecklisFailTooLarge(t *testing.T) {
 	})
 }
 
-func TestRunActions(t *testing.T) {
+func TestIgnoreKeywords(t *testing.T) {
 	e := Setup(t)
 	e.CreateBasic()
+	botID := e.Srv.Config().PluginSettings.Plugins[manifest.Id]["BotUserID"].(string)
 
-	t.Run("actions set settings", func(t *testing.T) {
-		settings := client.RunAction{
-			StatusUpdateBroadcastChannelsEnabled: true,
-			StatusUpdateBroadcastWebhooksEnabled: true,
-			BroadcastChannelIDs:                  []string{"chn1", "chn2"},
-			WebhookOnStatusUpdateURLs:            []string{"url1", "url2"},
+	t.Run("no permission to channel", func(t *testing.T) {
+		// Create a bot post in the private channel
+		botPost := &model.Post{
+			UserId:    botID,
+			ChannelId: e.BasicPrivateChannel.Id,
+			Message:   "test message",
+			Props: model.StringInterface{
+				"attachments": []*model.SlackAttachment{
+					{
+						Actions: []*model.PostAction{
+							{
+								Id: "ignoreKeywordsButton",
+							},
+						},
+					},
+				},
+			},
 		}
-		err := e.PlaybooksClient.PlaybookRuns.UpdateRunActions(context.Background(), e.BasicRun.ID, settings)
-		assert.NoError(t, err)
-
-		// Make sure the action settings are updated
-		editedRun, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+		botPost, err := e.Srv.Store().Post().Save(e.Context, botPost)
 		require.NoError(t, err)
-		require.Equal(t, settings.StatusUpdateBroadcastChannelsEnabled, editedRun.StatusUpdateBroadcastChannelsEnabled)
-		require.Equal(t, settings.StatusUpdateBroadcastWebhooksEnabled, editedRun.StatusUpdateBroadcastWebhooksEnabled)
-		require.Equal(t, settings.BroadcastChannelIDs, editedRun.BroadcastChannelIDs)
-		require.Equal(t, settings.WebhookOnStatusUpdateURLs, editedRun.WebhookOnStatusUpdateURLs)
+
+		// Create post action request
+		req := &model.PostActionIntegrationRequest{
+			UserId: e.RegularUser.Id,
+			Context: map[string]interface{}{
+				"post_id": botPost.Id,
+			},
+			PostId: botPost.Id,
+		}
+
+		// Convert request to JSON
+		reqBytes, err := json.Marshal(req)
+		require.NoError(t, err)
+
+		// Make the request
+		result, err := e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/signal/keywords/ignore-thread", reqBytes, "")
+		require.Error(t, err)
+		require.Equal(t, http.StatusForbidden, result.StatusCode)
 	})
 
-	t.Run("actions update settings", func(t *testing.T) {
-		settings := client.RunAction{
-			StatusUpdateBroadcastChannelsEnabled: false,
-			StatusUpdateBroadcastWebhooksEnabled: false,
-			BroadcastChannelIDs:                  []string{"chn1", "chn3"},
-			WebhookOnStatusUpdateURLs:            []string{"url3", "url4"},
-		}
-		err := e.PlaybooksClient.PlaybookRuns.UpdateRunActions(context.Background(), e.BasicRun.ID, settings)
-		assert.NoError(t, err)
-
-		// Make sure the action settings are updated
-		editedRun, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+	t.Run("has permission to channel", func(t *testing.T) {
+		// Add user to private channel
+		_, _, err := e.ServerAdminClient.AddChannelMember(context.Background(), e.BasicPrivateChannel.Id, e.RegularUser.Id)
 		require.NoError(t, err)
-		require.Equal(t, settings.StatusUpdateBroadcastChannelsEnabled, editedRun.StatusUpdateBroadcastChannelsEnabled)
-		require.Equal(t, settings.StatusUpdateBroadcastWebhooksEnabled, editedRun.StatusUpdateBroadcastWebhooksEnabled)
-		require.Equal(t, settings.BroadcastChannelIDs, editedRun.BroadcastChannelIDs)
-		require.Equal(t, settings.WebhookOnStatusUpdateURLs, editedRun.WebhookOnStatusUpdateURLs)
+
+		// Create a bot post in the private channel
+		botPost := &model.Post{
+			UserId:    botID,
+			ChannelId: e.BasicPrivateChannel.Id,
+			Message:   "test message",
+			Props: model.StringInterface{
+				"attachments": []*model.SlackAttachment{
+					{
+						Actions: []*model.PostAction{
+							{
+								Id: "ignoreKeywordsButton",
+							},
+						},
+					},
+				},
+			},
+		}
+		botPost, err = e.Srv.Store().Post().Save(e.Context, botPost)
+		require.NoError(t, err)
+
+		// Create post action request
+		req := &model.PostActionIntegrationRequest{
+			UserId: e.RegularUser.Id,
+			Context: map[string]interface{}{
+				"post_id": botPost.Id,
+			},
+			PostId: botPost.Id,
+		}
+
+		// Convert request to JSON
+		reqBytes, err := json.Marshal(req)
+		require.NoError(t, err)
+
+		// Make the request
+		result, err := e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/signal/keywords/ignore-thread", reqBytes, "")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, result.StatusCode)
 	})
 }
 
@@ -1274,23 +1597,342 @@ func TestReminderReset(t *testing.T) {
 	e := Setup(t)
 	e.CreateBasic()
 
-	t.Run("reminder reset - event created", func(t *testing.T) {
+	t.Run("reminder reset - timeline event created", func(t *testing.T) {
 		payload := client.ReminderResetPayload{
 			NewReminderSeconds: 100,
 		}
 		err := e.PlaybooksClient.Reminders.Reset(context.Background(), e.BasicRun.ID, payload)
 		assert.NoError(t, err)
 
-		pb, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+		run, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+		assert.Equal(t, 100*time.Second, run.PreviousReminder)
 		assert.NoError(t, err)
 
 		statusSnoozed := make([]client.TimelineEvent, 0)
-		for _, te := range pb.TimelineEvents {
+		for _, te := range run.TimelineEvents {
 			if te.EventType == "status_update_snoozed" {
 				statusSnoozed = append(statusSnoozed, te)
 			}
 		}
-
 		require.Len(t, statusSnoozed, 1)
 	})
+
+	t.Run("reminder reset - reminder post created", func(t *testing.T) {
+		payload := client.ReminderResetPayload{
+			NewReminderSeconds: 1,
+		}
+		err := e.PlaybooksClient.Reminders.Reset(context.Background(), e.BasicRun.ID, payload)
+		assert.NoError(t, err)
+
+		// wait for scheduler to run the job
+		time.Sleep(2 * time.Second)
+
+		run, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), e.BasicRun.ID)
+		assert.Equal(t, 1*time.Second, run.PreviousReminder)
+		assert.NotEmpty(t, run.ReminderPostID)
+		assert.NoError(t, err)
+
+		// post created with expected props
+		post, _, err := e.ServerClient.GetPost(context.Background(), run.ReminderPostID, "")
+		assert.NoError(t, err)
+		assert.Equal(t, run.ID, post.GetProp("playbookRunId"))
+		assert.Equal(t, e.RegularUser.Username, post.GetProp("targetUsername"))
+	})
+}
+
+func TestChecklisItem_SetAssignee(t *testing.T) {
+	e := Setup(t)
+	e.CreateBasic()
+
+	addSimpleChecklistToTun := func(t *testing.T, runID string) *client.PlaybookRun {
+		checklist := client.Checklist{
+			Title: "Test Checklist",
+			Items: []client.ChecklistItem{
+				{
+					Title: "Test Item",
+				},
+			},
+		}
+
+		err := e.PlaybooksClient.PlaybookRuns.CreateChecklist(context.Background(), runID, checklist)
+		require.NoError(t, err)
+
+		run, err := e.PlaybooksClient.PlaybookRuns.Get(context.Background(), runID)
+		require.NoError(t, err)
+		require.Len(t, run.Checklists, 1)
+		require.Len(t, run.Checklists[0].Items, 1)
+		return run
+	}
+
+	t.Run("set assignee and participant", func(t *testing.T) {
+		run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "Run name",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  e.BasicPlaybook.ID,
+		})
+		require.NoError(t, err)
+		require.Len(t, run.Checklists, 0)
+
+		run = addSimpleChecklistToTun(t, run.ID)
+
+		// assignee is not set and user is not participant (before)
+		require.Empty(t, run.Checklists[0].Items[0].AssigneeID)
+		require.Len(t, run.ParticipantIDs, 1)
+		require.NotContains(t, run.ParticipantIDs, e.RegularUser2.Id)
+
+		// set assignee
+		err = e.PlaybooksClient.PlaybookRuns.SetItemAssignee(context.Background(), run.ID, 0, 0, e.RegularUser2.Id)
+		require.NoError(t, err)
+
+		// assignee is not set and user is not participant (after)
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, e.RegularUser2.Id, run.Checklists[0].Items[0].AssigneeID)
+		require.Contains(t, run.ParticipantIDs, e.RegularUser2.Id)
+	})
+
+	t.Run("set and unset", func(t *testing.T) {
+		run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "Run name",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  e.BasicPlaybook.ID,
+		})
+		require.NoError(t, err)
+		require.Len(t, run.Checklists, 0)
+
+		run = addSimpleChecklistToTun(t, run.ID)
+
+		// set assignee
+		err = e.PlaybooksClient.PlaybookRuns.SetItemAssignee(context.Background(), run.ID, 0, 0, e.RegularUser.Id)
+		require.NoError(t, err)
+
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, e.RegularUser.Id, run.Checklists[0].Items[0].AssigneeID)
+
+		// unset assignee
+		err = e.PlaybooksClient.PlaybookRuns.SetItemAssignee(context.Background(), run.ID, 0, 0, "")
+		require.NoError(t, err)
+
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, "", run.Checklists[0].Items[0].AssigneeID)
+	})
+
+	t.Run("idempotent action", func(t *testing.T) {
+		run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+			Name:        "Run name",
+			OwnerUserID: e.RegularUser.Id,
+			TeamID:      e.BasicTeam.Id,
+			PlaybookID:  e.BasicPlaybook.ID,
+		})
+		require.NoError(t, err)
+		require.Len(t, run.Checklists, 0)
+
+		run = addSimpleChecklistToTun(t, run.ID)
+
+		// set assignee
+		err = e.PlaybooksClient.PlaybookRuns.SetItemAssignee(context.Background(), run.ID, 0, 0, e.RegularUser.Id)
+		require.NoError(t, err)
+
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, e.RegularUser.Id, run.Checklists[0].Items[0].AssigneeID)
+
+		// unset assignee
+		err = e.PlaybooksClient.PlaybookRuns.SetItemAssignee(context.Background(), run.ID, 0, 0, e.RegularUser.Id)
+		require.NoError(t, err)
+
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, e.RegularUser.Id, run.Checklists[0].Items[0].AssigneeID)
+	})
+}
+
+func TestChecklisItem_SetCommand(t *testing.T) {
+	e := Setup(t)
+	e.CreateBasic()
+
+	run, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+		Name:        "Run name",
+		OwnerUserID: e.RegularUser.Id,
+		TeamID:      e.BasicTeam.Id,
+		PlaybookID:  e.BasicPlaybook.ID,
+	})
+	require.NoError(t, err)
+	require.Len(t, run.Checklists, 0)
+
+	checklist := client.Checklist{
+		Title: "Test Checklist",
+		Items: []client.ChecklistItem{
+			{
+				Title: "Test Item",
+			},
+		},
+	}
+
+	err = e.PlaybooksClient.PlaybookRuns.CreateChecklist(context.Background(), run.ID, checklist)
+	require.NoError(t, err)
+
+	run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+	require.NoError(t, err)
+	require.Len(t, run.Checklists, 1)
+	require.Len(t, run.Checklists[0].Items, 1)
+
+	t.Run("set command", func(t *testing.T) {
+		// command and commandlastrun are not set (before)
+		require.Empty(t, run.Checklists[0].Items[0].CommandLastRun)
+		require.Empty(t, run.Checklists[0].Items[0].Command)
+
+		// set command
+		err = e.PlaybooksClient.PlaybookRuns.SetItemCommand(context.Background(), run.ID, 0, 0, "/playbook todo")
+		require.NoError(t, err)
+
+		// command and commandlastrun are set (after)
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, "/playbook todo", run.Checklists[0].Items[0].Command)
+		require.Equal(t, int64(0), run.Checklists[0].Items[0].CommandLastRun)
+	})
+
+	t.Run("run command", func(t *testing.T) {
+		// command and commandlastrun are not set (before)
+		require.Empty(t, run.Checklists[0].Items[0].CommandLastRun)
+
+		// run command
+		err = e.PlaybooksClient.PlaybookRuns.RunItemCommand(context.Background(), run.ID, 0, 0)
+		require.NoError(t, err)
+
+		// command and commandlastrun are set (after)
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, "/playbook todo", run.Checklists[0].Items[0].Command)
+		require.NotZero(t, run.Checklists[0].Items[0].CommandLastRun)
+	})
+
+	t.Run("can't run if not member", func(t *testing.T) {
+		// run command
+		err = e.PlaybooksClient2.PlaybookRuns.RunItemCommand(context.Background(), run.ID, 0, 0)
+		require.Error(t, err)
+	})
+
+	t.Run("rerun command", func(t *testing.T) {
+		lastRun := run.Checklists[0].Items[0].CommandLastRun
+
+		// rerun command
+		err = e.PlaybooksClient.PlaybookRuns.RunItemCommand(context.Background(), run.ID, 0, 0)
+		require.NoError(t, err)
+
+		// command and commandlastrun are set (after)
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Less(t, lastRun, run.Checklists[0].Items[0].CommandLastRun)
+	})
+
+	t.Run("set a the same command", func(t *testing.T) {
+		lastRun := run.Checklists[0].Items[0].CommandLastRun
+
+		// set command
+		err = e.PlaybooksClient.PlaybookRuns.SetItemCommand(context.Background(), run.ID, 0, 0, "/playbook todo")
+		require.NoError(t, err)
+
+		// command and commandlastrun are set (after)
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, "/playbook todo", run.Checklists[0].Items[0].Command)
+		require.Equal(t, lastRun, run.Checklists[0].Items[0].CommandLastRun)
+	})
+
+	t.Run("set a different command", func(t *testing.T) {
+		// set command
+		err = e.PlaybooksClient.PlaybookRuns.SetItemCommand(context.Background(), run.ID, 0, 0, "/playbook finish")
+		require.NoError(t, err)
+
+		// command and commandlastrun are set (after)
+		run, err = e.PlaybooksClient.PlaybookRuns.Get(context.Background(), run.ID)
+		require.NoError(t, err)
+		require.Equal(t, "/playbook finish", run.Checklists[0].Items[0].Command)
+		require.Zero(t, run.Checklists[0].Items[0].CommandLastRun)
+	})
+}
+
+func TestGetOwners(t *testing.T) {
+	e := Setup(t)
+	e.CreateBasic()
+
+	ownerFromUser := func(u *model.User) client.OwnerInfo {
+		return client.OwnerInfo{
+			UserID:    u.Id,
+			Username:  u.Username,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+			Nickname:  u.Nickname,
+		}
+	}
+
+	_, err := e.PlaybooksClient.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+		Name:        "Run name",
+		OwnerUserID: e.RegularUser.Id,
+		TeamID:      e.BasicTeam.Id,
+		PlaybookID:  e.BasicPlaybook.ID,
+	})
+	require.NoError(t, err)
+
+	_, err = e.PlaybooksClient2.PlaybookRuns.Create(context.Background(), client.PlaybookRunCreateOptions{
+		Name:        "Run name",
+		OwnerUserID: e.RegularUser2.Id,
+		TeamID:      e.BasicTeam.Id,
+		PlaybookID:  e.BasicPlaybook.ID,
+	})
+	require.NoError(t, err)
+
+	fullOwner1 := ownerFromUser(e.RegularUser)
+	fullOwner2 := ownerFromUser(e.RegularUser2)
+	partialOwner1 := fullOwner1
+	partialOwner1.FirstName = ""
+	partialOwner1.LastName = ""
+	partialOwner2 := fullOwner2
+	partialOwner2.FirstName = ""
+	partialOwner2.LastName = ""
+	for _, tc := range []struct {
+		Name         string
+		ShowFullName bool
+		Client       *client.Client
+		MustContain  []client.OwnerInfo
+	}{
+		{
+			Name:         "showfullname set to true",
+			ShowFullName: true,
+			Client:       e.PlaybooksClient,
+			MustContain:  []client.OwnerInfo{fullOwner1, fullOwner2},
+		},
+		{
+			Name:         "showfullname set to false",
+			ShowFullName: false,
+			Client:       e.PlaybooksClient,
+			MustContain:  []client.OwnerInfo{partialOwner1, partialOwner2},
+		},
+		{
+			Name:         "showfullname set to false and sysadmin",
+			ShowFullName: false,
+			Client:       e.PlaybooksAdminClient,
+			MustContain:  []client.OwnerInfo{fullOwner1, fullOwner2},
+		},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			cfg := e.Srv.Config()
+			cfg.PrivacySettings.ShowFullName = model.NewPointer(tc.ShowFullName)
+			_, _, err = e.ServerAdminClient.UpdateConfig(context.Background(), cfg)
+			require.NoError(t, err)
+
+			owners, err := tc.Client.PlaybookRuns.GetOwners(context.Background())
+			require.NoError(t, err)
+			require.Len(t, owners, len(tc.MustContain))
+			for _, mc := range tc.MustContain {
+				require.Contains(t, owners, mc)
+			}
+		})
+	}
 }

@@ -9,7 +9,7 @@ import {RunMetricData} from 'src/types/playbook_run';
 import {Metric, MetricType} from 'src/types/playbook';
 import {ClockOutline, DollarSign, PoundSign} from 'src/components/backstage/playbook_edit/styles';
 import MetricInput from 'src/components/backstage/playbook_runs/playbook_run/metrics/metric_input';
-import {isMetricValueValid, stringToMetric, metricToString} from 'src/components/backstage/playbook_edit/metrics/shared';
+import {isMetricValueValid, metricToString, stringToMetric} from 'src/components/backstage/playbook_edit/metrics/shared';
 import {VerticalSpacer} from 'src/components/backstage/styles';
 
 interface MetricsProps {
@@ -66,7 +66,7 @@ const MetricsData = forwardRef(({metricsData, metricsConfigs, notEditable, onEdi
                 errors[index] = errorEmptyValue;
             }
             if (!isMetricValueValid(metricsConfigs[index].type, value)) {
-                errors[index] = metricsConfigs[index].type === MetricType.Duration ? errorDuration : errorCurrencyInteger;
+                errors[index] = metricsConfigs[index].type === MetricType.MetricDuration ? errorDuration : errorCurrencyInteger;
             }
         });
         return errors;
@@ -108,9 +108,9 @@ const MetricsData = forwardRef(({metricsData, metricsConfigs, notEditable, onEdi
                 metricsConfigs.map((mc, idx) => {
                     let placeholder = formatMessage({defaultMessage: ' Add value'});
                     let inputIcon = <DollarSign sizePx={18}/>;
-                    if (mc.type === MetricType.Integer) {
+                    if (mc.type === MetricType.MetricInteger) {
                         inputIcon = <PoundSign sizePx={18}/>;
-                    } else if (mc.type === MetricType.Duration) {
+                    } else if (mc.type === MetricType.MetricDuration) {
                         placeholder = formatMessage({defaultMessage: ' Add value (in dd:hh:mm)'});
                         inputIcon = <ClockOutline sizePx={18}/>;
                     }

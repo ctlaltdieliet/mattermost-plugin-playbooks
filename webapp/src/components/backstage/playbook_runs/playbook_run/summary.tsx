@@ -6,9 +6,9 @@ import styled from 'styled-components';
 
 import {useIntl} from 'react-intl';
 
+import {useUpdateRun} from 'src/graphql/hooks';
 import MarkdownEdit from 'src/components/markdown_edit';
 import {PlaybookRun} from 'src/types/playbook_run';
-import {updatePlaybookRunDescription} from 'src/client';
 import {Timestamp} from 'src/webapp_globals';
 import {AnchorLinkTitle, Role} from 'src/components/backstage/playbook_runs/shared';
 import {PAST_TIME_SPEC} from 'src/components/time_spec';
@@ -23,6 +23,7 @@ const Summary = ({
     id, playbookRun, role,
 }: Props) => {
     const {formatMessage} = useIntl();
+    const updateRun = useUpdateRun(playbookRun.id);
 
     const title = formatMessage({defaultMessage: 'Summary'});
     const modifiedAt = (
@@ -39,6 +40,7 @@ const Summary = ({
     );
 
     const placeholder = role === Role.Participant ? formatMessage({defaultMessage: 'Add a run summary'}) : formatMessage({defaultMessage: 'There\'s no summary'});
+    const disabled = (Role.Viewer === role || playbookRun.end_at > 0);
 
     return (
         <Container
@@ -53,11 +55,11 @@ const Summary = ({
                 {playbookRun.summary_modified_at > 0 && modifiedAtMessage}
             </Header>
             <MarkdownEdit
-                disabled={Role.Viewer === role}
+                disabled={disabled}
                 placeholder={placeholder}
                 value={playbookRun.summary}
                 onSave={(value) => {
-                    updatePlaybookRunDescription(playbookRun.id, value);
+                    updateRun({summary: value});
                 }}
             />
         </Container>

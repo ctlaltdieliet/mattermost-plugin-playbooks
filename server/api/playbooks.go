@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/timeutils"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
+	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
 )
 
 // PlaybookHandler is the API handler.
@@ -111,6 +111,14 @@ func (h *PlaybookHandler) validPlaybook(w http.ResponseWriter, logger logrus.Fie
 			}
 		}
 	}
+	for listIndex := range playbook.Checklists {
+		for itemIndex := range playbook.Checklists[listIndex].Items {
+			if err := validateTaskActions(playbook.Checklists[listIndex].Items[itemIndex].TaskActions); err != nil {
+				h.HandleErrorWithCode(w, logger, http.StatusBadRequest, "invalid task actions", err)
+				return false
+			}
+		}
+	}
 
 	return true
 }
@@ -156,7 +164,12 @@ func (h *PlaybookHandler) createPlaybook(c *Context, w http.ResponseWriter, r *h
 		return
 	}
 
-	cleanUpChecklist(playbook.Checklists)
+	app.CleanUpChecklists(playbook.Checklists)
+
+	if err := validatePreAssignment(playbook); err != nil {
+		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "Invalid pre-assignment", err)
+		return
+	}
 
 	id, err := h.playbookService.Create(playbook, userID)
 	if err != nil {
@@ -209,7 +222,7 @@ func (h *PlaybookHandler) updatePlaybook(c *Context, w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := h.validateMetrics(playbook); err != nil {
+	if err = h.validateMetrics(playbook); err != nil {
 		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "invalid metrics configs", err)
 		return
 	}
@@ -227,7 +240,12 @@ func (h *PlaybookHandler) updatePlaybook(c *Context, w http.ResponseWriter, r *h
 		return
 	}
 
-	cleanUpChecklist(playbook.Checklists)
+	app.CleanUpChecklists(playbook.Checklists)
+
+	if err = validatePreAssignment(playbook); err != nil {
+		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "Invalid user pre-assignment", err)
+		return
+	}
 
 	err = h.playbookService.Update(playbook, userID)
 	if err != nil {
@@ -238,18 +256,30 @@ func (h *PlaybookHandler) updatePlaybook(c *Context, w http.ResponseWriter, r *h
 	w.WriteHeader(http.StatusOK)
 }
 
-// cleanUpChecklist sets empty values for playbooks checklist fields that are not editable
-// NOTE: Any changes to this function must be made to function 'cleanUpUpdateChecklist' for the GraphQL endpoint.
-func cleanUpChecklist(checklists []app.Checklist) {
-	for listIndex := range checklists {
-		for itemIndex := range checklists[listIndex].Items {
-			checklists[listIndex].Items[itemIndex].AssigneeID = ""
-			checklists[listIndex].Items[itemIndex].AssigneeModified = 0
-			checklists[listIndex].Items[itemIndex].State = ""
-			checklists[listIndex].Items[itemIndex].StateModified = 0
-			checklists[listIndex].Items[itemIndex].CommandLastRun = 0
+func validatePreAssignment(pb app.Playbook) error {
+	assignees := app.GetDistinctAssignees(pb.Checklists)
+	return app.ValidatePreAssignment(assignees, pb.InvitedUserIDs, pb.InviteUsersEnabled)
+}
+
+// validateTaskActions validates the taskactions in the given checklist
+// NOTE: Any changes to this function must be made to function 'validateUpdateTaskActions' for the GraphQL endpoint.
+func validateTaskActions(taskActions []app.TaskAction) error {
+	// Limit task actions to 10
+	if len(taskActions) > 10 {
+		return errors.Errorf("playbook cannot have more than 10 task actions")
+	}
+
+	for _, ta := range taskActions {
+		if err := app.ValidateTrigger(ta.Trigger); err != nil {
+			return err
+		}
+		for _, a := range ta.Actions {
+			if err := app.ValidateAction(a); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (h *PlaybookHandler) archivePlaybook(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -318,6 +348,16 @@ func (h *PlaybookHandler) getPlaybooks(c *Context, w http.ResponseWriter, r *htt
 		UserID:  userID,
 		TeamID:  teamID,
 		IsAdmin: app.IsSystemAdmin(userID, h.pluginAPI),
+	}
+
+	isGuest, err := app.IsGuest(userID, h.pluginAPI)
+	if err != nil {
+		h.HandleErrorWithCode(w, c.logger, http.StatusForbidden, "", err)
+		return
+	}
+
+	if isGuest {
+		opts.WithMembershipOnly = true
 	}
 
 	playbookResults, err := h.playbookService.GetPlaybooksForTeam(requesterInfo, teamID, opts)
@@ -622,7 +662,7 @@ func (h *PlaybookHandler) importPlaybook(c *Context, w http.ResponseWriter, r *h
 
 func (h *PlaybookHandler) validateMetrics(pb app.Playbook) error {
 	if len(pb.Metrics) > app.MaxMetricsPerPlaybook {
-		return errors.Errorf(fmt.Sprintf("playbook cannot have more than %d key metrics", app.MaxMetricsPerPlaybook))
+		return errors.Errorf("playbook cannot have more than %d key metrics", app.MaxMetricsPerPlaybook)
 	}
 
 	//check if titles are unique
@@ -666,18 +706,16 @@ func (h *PlaybookHandler) getTopPlaybooksForUser(c *Context, w http.ResponseWrit
 		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "unable to get user", err)
 		return
 	}
-	timezone, err := timeutils.GetUserTimezone(user)
+	timezone := user.GetTimezoneLocation()
+
+	// get unix time for duration
+	startTime, err := GetStartOfDayForTimeRange(timeRange, timezone)
 	if err != nil {
-		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "unable to get user timezone", err)
+		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "invalid time parameter", err)
 		return
 	}
-	if timezone == nil {
-		timezone = time.Now().UTC().Location()
-	}
-	// get unix time for duration
-	startTime := model.StartOfDayForTimeRange(timeRange, timezone)
 
-	topPlaybooks, err := h.playbookService.GetTopPlaybooksForUser(teamID, userID, &model.InsightsOpts{
+	topPlaybooks, err := h.playbookService.GetTopPlaybooksForUser(teamID, userID, &app.InsightsOpts{
 		StartUnixMilli: model.GetMillisForTime(*startTime),
 		Page:           page,
 		PerPage:        perPage,
@@ -719,18 +757,16 @@ func (h *PlaybookHandler) getTopPlaybooksForTeam(c *Context, w http.ResponseWrit
 		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "unable to get user", err)
 		return
 	}
-	timezone, err := timeutils.GetUserTimezone(user)
+	timezone := user.GetTimezoneLocation()
+
+	// get unix time for duration
+	startTime, err := GetStartOfDayForTimeRange(timeRange, timezone)
 	if err != nil {
-		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "unable to get user timezone", err)
+		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "invalid time parameter", err)
 		return
 	}
-	if timezone == nil {
-		timezone = time.Now().UTC().Location()
-	}
-	// get unix time for duration
-	startTime := model.StartOfDayForTimeRange(timeRange, timezone)
 
-	topPlaybooks, err := h.playbookService.GetTopPlaybooksForTeam(teamID, userID, &model.InsightsOpts{
+	topPlaybooks, err := h.playbookService.GetTopPlaybooksForTeam(teamID, userID, &app.InsightsOpts{
 		StartUnixMilli: model.GetMillisForTime(*startTime),
 		Page:           page,
 		PerPage:        perPage,
@@ -740,4 +776,30 @@ func (h *PlaybookHandler) getTopPlaybooksForTeam(c *Context, w http.ResponseWrit
 		return
 	}
 	ReturnJSON(w, &topPlaybooks, http.StatusOK)
+}
+
+// Copied from https://github.com/mattermost/mattermost/blob/e37459cd000bbcea6f09675285e2fe080bd52605/server/public/model/insights.go
+const (
+	TimeRangeToday string = "today"
+	TimeRange7Day  string = "7_day"
+	TimeRange28Day string = "28_day"
+)
+
+// GetStartOfDayForTimeRange gets the unix start time in milliseconds from the given time range.
+// Time range can be one of: "today", "7_day", or "28_day".
+//
+// Copied from https://github.com/mattermost/mattermost/blob/e37459cd000bbcea6f09675285e2fe080bd52605/server/public/model/insights.go
+func GetStartOfDayForTimeRange(timeRange string, location *time.Location) (*time.Time, error) {
+	now := time.Now().In(location)
+	resultTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, location)
+	switch timeRange {
+	case TimeRangeToday:
+	case TimeRange7Day:
+		resultTime = resultTime.Add(time.Hour * time.Duration(-144))
+	case TimeRange28Day:
+		resultTime = resultTime.Add(time.Hour * time.Duration(-648))
+	default:
+		return nil, errors.New("Invalid time range")
+	}
+	return &resultTime, nil
 }

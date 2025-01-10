@@ -9,7 +9,13 @@ import {KeyVariantCircleIcon} from '@mattermost/compass-icons/components';
 
 import {TertiaryButton} from 'src/components/assets/buttons';
 import DotMenu, {DropdownMenuItem} from 'src/components/dot_menu';
-import {DraftPlaybookWithChecklist, MetricType, Metric, newMetric, PlaybookWithChecklist} from 'src/types/playbook';
+import {
+    DraftPlaybookWithChecklist,
+    Metric,
+    MetricType,
+    PlaybookWithChecklist,
+    newMetric,
+} from 'src/types/playbook';
 import MetricEdit from 'src/components/backstage/playbook_edit/metrics/metric_edit';
 import MetricView from 'src/components/backstage/playbook_edit/metrics/metric_view';
 import {ClockOutline, DollarSign, PoundSign} from 'src/components/backstage/playbook_edit/styles';
@@ -134,7 +140,7 @@ const Metrics = ({
         // Do we have a requested task ready to do next?
         if (nextTask?.type === TaskType.add) {
             // Typescript needs defaults (even though they will be present)
-            addMetric(nextTask?.addType || MetricType.Duration, length);
+            addMetric(nextTask?.addType || MetricType.MetricDuration, length);
         } else if (nextTask?.type === TaskType.edit) {
             // The following is because if editIndex === 0, 0 is falsey
             // eslint-disable-next-line no-undefined
@@ -202,21 +208,21 @@ const Metrics = ({
                     disabled={disabled || metrics.length >= 4}
                     placement='bottom-start'
                 >
-                    <DropdownMenuItem onClick={() => requestAddMetric(MetricType.Duration)}>
+                    <DropdownMenuItem onClick={() => requestAddMetric(MetricType.MetricDuration)}>
                         <MetricTypeOption
                             icon={<ClockOutline sizePx={18}/>}
                             title={formatMessage({defaultMessage: 'Duration (in dd:hh:mm)'})}
                             description={formatMessage({defaultMessage: 'e.g., Time to acknowledge, Time to resolve'})}
                         />
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => requestAddMetric(MetricType.Currency)}>
+                    <DropdownMenuItem onClick={() => requestAddMetric(MetricType.MetricCurrency)}>
                         <MetricTypeOption
                             icon={<DollarSign sizePx={18}/>}
-                            title={formatMessage({defaultMessage: 'Dollars'})}
-                            description={formatMessage({defaultMessage: 'e.g., Cost, Purchases'})}
+                            title={formatMessage({defaultMessage: 'Cost'})}
+                            description={formatMessage({defaultMessage: 'e.g., Sales impact, Purchases'})}
                         />
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => requestAddMetric(MetricType.Integer)}>
+                    <DropdownMenuItem onClick={() => requestAddMetric(MetricType.MetricInteger)}>
                         <MetricTypeOption
                             icon={<PoundSign sizePx={18}/>}
                             title={formatMessage({defaultMessage: 'Integer'})}
@@ -328,6 +334,7 @@ const OptionDesc = styled.div`
 
 const ConfirmModalFooter = styled(DefaultFooterContainer)`
     align-items: center;
+    flex: 1;
     margin-bottom: 24px;
 
     button.confirm {

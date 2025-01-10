@@ -6,13 +6,18 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 )
+
+type PostVerifier interface {
+	IsFromPoster(post *model.Post) bool
+}
 
 type SignalHandler struct {
 	*ErrorHandler
@@ -20,15 +25,17 @@ type SignalHandler struct {
 	playbookRunService    app.PlaybookRunService
 	playbookService       app.PlaybookService
 	keywordsThreadIgnorer app.KeywordsThreadIgnorer
+	postVerifier          PostVerifier
 }
 
-func NewSignalHandler(router *mux.Router, api *pluginapi.Client, playbookRunService app.PlaybookRunService, playbookService app.PlaybookService, keywordsThreadIgnorer app.KeywordsThreadIgnorer) *SignalHandler {
+func NewSignalHandler(router *mux.Router, api *pluginapi.Client, playbookRunService app.PlaybookRunService, playbookService app.PlaybookService, keywordsThreadIgnorer app.KeywordsThreadIgnorer, postVerifier PostVerifier) *SignalHandler {
 	handler := &SignalHandler{
 		ErrorHandler:          &ErrorHandler{},
 		api:                   api,
 		playbookRunService:    playbookRunService,
 		playbookService:       playbookService,
 		keywordsThreadIgnorer: keywordsThreadIgnorer,
+		postVerifier:          postVerifier,
 	}
 
 	signalRouter := router.PathPrefix("/signal").Subrouter()
@@ -54,27 +61,15 @@ func (h *SignalHandler) playbookRun(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	id, err := getStringField("selected_option", req.Context, w)
+	botPost, err := h.verifyRequestAuthenticity(req, "runPlaybookButton")
 	if err != nil {
 		h.returnError(publicErrorMessage, err, c.logger, w)
 		return
 	}
 
-	isMobile, err := getBoolField("isMobile", req.Context, w)
+	id, err := getStringField("selected_option", req.Context)
 	if err != nil {
 		h.returnError(publicErrorMessage, err, c.logger, w)
-		return
-	}
-
-	postID, err := getStringField("postID", req.Context, w)
-	if err != nil {
-		h.returnError(publicErrorMessage, err, c.logger, w)
-		return
-	}
-
-	post, err := h.api.Post.GetPost(req.PostId)
-	if err != nil {
-		h.returnError(fmt.Sprintf("unable to get original post with ID %q", postID), err, c.logger, w)
 		return
 	}
 
@@ -84,16 +79,21 @@ func (h *SignalHandler) playbookRun(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.playbookRunService.OpenCreatePlaybookRunDialog(req.TeamId, req.UserId, req.TriggerId, postID, "", []app.Playbook{pbook}, isMobile, post.Id); err != nil {
+	if err := h.playbookRunService.OpenCreatePlaybookRunDialog(req.TeamId, req.UserId, req.TriggerId, "", "", []app.Playbook{pbook}); err != nil {
 		h.returnError("can't open dialog", errors.Wrap(err, "can't open a dialog"), c.logger, w)
 		return
 	}
 
 	ReturnJSON(w, &model.PostActionIntegrationResponse{}, http.StatusOK)
+	if err := h.api.Post.DeletePost(botPost.Id); err != nil {
+		h.returnError("unable to delete original post", err, c.logger, w)
+		return
+	}
 }
 
 func (h *SignalHandler) ignoreKeywords(c *Context, w http.ResponseWriter, r *http.Request) {
 	publicErrorMessage := "unable to decode post action integration request"
+	userID := r.Header.Get("Mattermost-User-ID")
 
 	var req *model.PostActionIntegrationRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -102,10 +102,20 @@ func (h *SignalHandler) ignoreKeywords(c *Context, w http.ResponseWriter, r *htt
 		return
 	}
 
-	postID, err := getStringField("postID", req.Context, w)
+	botPost, err := h.verifyRequestAuthenticity(req, "ignoreKeywordsButton")
 	if err != nil {
 		h.returnError(publicErrorMessage, err, c.logger, w)
 		return
+	}
+
+	if !h.api.User.HasPermissionToChannel(userID, botPost.ChannelId, model.PermissionReadChannel) {
+		h.HandleErrorWithCode(w, c.logger, http.StatusForbidden, "no permission to post specified", nil)
+		return
+	}
+
+	postID, err := getStringField("postID", req.Context)
+	if err != nil {
+		h.returnError(publicErrorMessage, err, c.logger, w)
 	}
 	post, err := h.api.Post.GetPost(postID)
 	if err != nil {
@@ -119,7 +129,7 @@ func (h *SignalHandler) ignoreKeywords(c *Context, w http.ResponseWriter, r *htt
 	}
 
 	ReturnJSON(w, &model.PostActionIntegrationResponse{}, http.StatusOK)
-	if err := h.api.Post.DeletePost(req.PostId); err != nil {
+	if err := h.api.Post.DeletePost(botPost.Id); err != nil {
 		h.returnError("unable to delete original post", err, c.logger, w)
 		return
 	}
@@ -133,7 +143,7 @@ func (h *SignalHandler) returnError(returnMessage string, err error, logger logr
 	ReturnJSON(w, &resp, http.StatusOK)
 }
 
-func getStringField(field string, context map[string]interface{}, w http.ResponseWriter) (string, error) {
+func getStringField(field string, context map[string]interface{}) (string, error) {
 	fieldInt, ok := context[field]
 	if !ok {
 		return "", errors.Errorf("no %s field in the request context", field)
@@ -145,14 +155,26 @@ func getStringField(field string, context map[string]interface{}, w http.Respons
 	return fieldValue, nil
 }
 
-func getBoolField(field string, context map[string]interface{}, w http.ResponseWriter) (bool, error) {
-	fieldInt, ok := context[field]
-	if !ok {
-		return false, errors.Errorf("no %s field in the request context", field)
+// verifyRequestAuthenticity verifies the authenticity of the request by checking if the original post is from the plugin bot
+// and if the action ID match the ones provided in the request.
+// It returns an error if the authenticity check fails, otherwise it returns the original post.
+func (h *SignalHandler) verifyRequestAuthenticity(req *model.PostActionIntegrationRequest, actionID string) (*model.Post, error) {
+	botPost, err := h.api.Post.GetPost(req.PostId)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve original post: %w", err)
 	}
-	fieldValue, ok := fieldInt.(bool)
-	if !ok {
-		return false, errors.Errorf("%s field is not a string", field)
+	if !h.postVerifier.IsFromPoster(botPost) {
+		return nil, errors.New("original post is not from the plugin bot")
 	}
-	return fieldValue, nil
+
+	attachments := botPost.Attachments()
+	if len(attachments) == 0 {
+		return nil, errors.New("no attachments in the bot post")
+	}
+	for _, action := range attachments[0].Actions {
+		if action.Id == actionID {
+			return botPost, nil
+		}
+	}
+	return nil, errors.New("no matching action found in the bot post")
 }

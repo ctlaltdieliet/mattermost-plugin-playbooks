@@ -76,6 +76,11 @@ export const PrimaryButton = styled(Button)`
             opacity: 1;
         }
     }
+
+    &:disabled {
+        color: rgba(var(--center-channel-color-rgb), 0.32);
+        background: rgba(var(--center-channel-color-rgb), 0.08);
+    }
 `;
 
 export const SubtlePrimaryButton = styled(Button)`
@@ -90,6 +95,7 @@ export const SubtlePrimaryButton = styled(Button)`
 export const TertiaryButton = styled.button`
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     height: 40px;
     border-radius: 4px;
     border: 0px;
@@ -191,16 +197,6 @@ export const DestructiveButton = styled.button`
 `;
 
 export type UpgradeButtonProps = React.ComponentProps<typeof PrimaryButton>;
-
-export const UpgradeButton = (props: UpgradeButtonProps) => {
-    const {children, ...rest} = props;
-    return (
-        <PrimaryButton {...rest}>
-            {children}
-            <PositionedKeyVariantCircleIcon/>
-        </PrimaryButton>
-    );
-};
 
 export const UpgradeTertiaryButton = (props: UpgradeButtonProps & {className?: string}) => {
     const {children, ...rest} = props;

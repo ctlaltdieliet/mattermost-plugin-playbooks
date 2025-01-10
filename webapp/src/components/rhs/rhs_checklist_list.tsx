@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 
 import React, {useState} from 'react';
-import {useIntl} from 'react-intl';
+import {FormattedMessage, useIntl} from 'react-intl';
 import {useDispatch, useSelector} from 'react-redux';
 import styled from 'styled-components';
 
@@ -11,10 +11,11 @@ import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 import {getTeammateNameDisplaySetting} from 'mattermost-redux/selectors/entities/preferences';
 import {displayUsername} from 'mattermost-redux/utils/user_utils';
 import {DateTime} from 'luxon';
-import {GlobalState} from 'mattermost-webapp/types/store';
+import {GlobalState} from '@mattermost/types/store';
 
-import {PlaybookRun} from 'src/types/playbook_run';
+import {PlaybookRun, PlaybookRunStatus} from 'src/types/playbook_run';
 import {
+    finishRun,
     setAllChecklistsCollapsedState,
     setChecklistCollapsedState,
     setChecklistItemsFilter,
@@ -23,30 +24,31 @@ import {
 import {
     Checklist,
     ChecklistItem,
-    ChecklistItemsFilter,
     ChecklistItemState,
+    ChecklistItemsFilter,
 } from 'src/types/playbook';
-import {
-    telemetryEventForPlaybookRun,
-} from 'src/client';
+import {telemetryEventForPlaybookRun} from 'src/client';
 import {HoverMenu, HoverMenuButton} from 'src/components/rhs/rhs_shared';
-import {
-    currentChecklistAllCollapsed,
-    currentChecklistCollapsedState,
-    currentChecklistItemsFilter,
-} from 'src/selectors';
+import {currentChecklistAllCollapsed, currentChecklistCollapsedState, currentChecklistItemsFilter} from 'src/selectors';
 import MultiCheckbox, {CheckboxOption} from 'src/components/multi_checkbox';
 import {DotMenuButton} from 'src/components/dot_menu';
 import {SemiBoldHeading} from 'src/styles/headings';
 import ChecklistList from 'src/components/checklist/checklist_list';
-import {AnchorLinkTitle} from '../backstage/playbook_runs/shared';
+
+import {AnchorLinkTitle} from 'src/components/backstage/playbook_runs/shared';
+
 import {ButtonsFormat as ItemButtonsFormat} from 'src/components/checklist_item/checklist_item';
+import {PrimaryButton, TertiaryButton} from 'src/components/assets/buttons';
+import TutorialTourTip, {useMeasurePunchouts, useShowTutorialStep} from 'src/components/tutorial/tutorial_tour_tip';
+import {RunDetailsTutorialSteps, TutorialTourCategories} from 'src/components/tutorial/tours';
+import GiveFeedbackButton from 'src/components/give_feedback_button';
 
 interface Props {
     playbookRun: PlaybookRun;
     parentContainer: ChecklistParent;
     id?: string;
-    viewerMode: boolean;
+    readOnly: boolean;
+    onReadOnlyInteract?: () => void
 }
 
 export enum ChecklistParent {
@@ -54,7 +56,44 @@ export enum ChecklistParent {
     RunDetails = 'run_details',
 }
 
-const RHSChecklistList = ({id, playbookRun, parentContainer, viewerMode}: Props) => {
+const StyledTertiaryButton = styled(TertiaryButton)`
+    display: inline-block;
+    margin: 12px 0;
+`;
+
+const StyledPrimaryButton = styled(PrimaryButton)`
+    display: inline-block;
+    margin: 12px 0;
+`;
+
+const RHSGiveFeedbackButton = styled(GiveFeedbackButton)`
+    && {
+        color: var(--center-channel-color-64);
+    }
+
+    &&:hover:not([disabled]) {
+        color: var(--center-channel-color-72);
+        background-color: var(--center-channel-color-08);
+    }
+`;
+
+const allComplete = (checklists: Checklist[]) => {
+    return notFinishedTasks(checklists) === 0;
+};
+
+const notFinishedTasks = (checklists: Checklist[]) => {
+    let count = 0;
+    for (const list of checklists) {
+        for (const item of list.items) {
+            if (item.state === ChecklistItemState.Open || item.state === ChecklistItemState.InProgress) {
+                count++;
+            }
+        }
+    }
+    return count;
+};
+
+const RHSChecklistList = ({id, playbookRun, parentContainer, readOnly, onReadOnlyInteract}: Props) => {
     const dispatch = useDispatch();
     const {formatMessage} = useIntl();
     const channelId = useSelector(getCurrentChannelId);
@@ -85,6 +124,11 @@ const RHSChecklistList = ({id, playbookRun, parentContainer, viewerMode}: Props)
 
         // "Show checked tasks" is not checked, so if item is checked (closed), don't show it.
         if (!checklistItemsFilter.checked && checklistItem.state === ChecklistItemState.Closed) {
+            return false;
+        }
+
+        // "Show skipped tasks" is not checked, so if item is skipped, don't show it.
+        if (!checklistItemsFilter.skipped && checklistItem.state === ChecklistItemState.Skip) {
             return false;
         }
 
@@ -149,19 +193,31 @@ const RHSChecklistList = ({id, playbookRun, parentContainer, viewerMode}: Props)
             title={formatMessage({defaultMessage: 'Tasks'})}
             id={id || ''}
         />
-    ) : <>{formatMessage({defaultMessage: 'Checklists'})}</>;
+    ) : <>{formatMessage({defaultMessage: 'Tasks'})}</>;
 
     const itemButtonsFormat = () => {
         if (parentContainer === ChecklistParent.RHS) {
             return ItemButtonsFormat.Short;
         }
 
-        if (viewerMode) {
+        if (readOnly) {
             return ItemButtonsFormat.Mixed;
         }
 
         return ItemButtonsFormat.Long;
     };
+    const FinishButton = allComplete(checklists) ? StyledPrimaryButton : StyledTertiaryButton;
+    const active = (playbookRun !== undefined) && (playbookRun.current_status === PlaybookRunStatus.InProgress);
+
+    const checklistsPunchout = useMeasurePunchouts(
+        ['pb-checklists-inner-container'],
+        [],
+        {y: -5, height: 10, x: -5, width: 10},
+    );
+    const showRunDetailsChecklistsStep = useShowTutorialStep(
+        RunDetailsTutorialSteps.Checklists,
+        TutorialTourCategories.RUN_DETAILS
+    );
 
     return (
         <InnerContainer
@@ -208,14 +264,45 @@ const RHSChecklistList = ({id, playbookRun, parentContainer, viewerMode}: Props)
             </MainTitleBG>
             <ChecklistList
                 playbookRun={playbookRun}
-                enableFinishRun={parentContainer === ChecklistParent.RHS}
-                isReadOnly={viewerMode}
+                isReadOnly={readOnly}
                 checklistsCollapseState={checklistsState}
                 onChecklistCollapsedStateChange={onChecklistCollapsedStateChange}
                 onEveryChecklistCollapsedStateChange={onEveryChecklistCollapsedStateChange}
                 showItem={showItem}
                 itemButtonsFormat={itemButtonsFormat()}
+                onReadOnlyInteract={onReadOnlyInteract}
             />
+            {
+                active && parentContainer === ChecklistParent.RHS && playbookRun &&
+                <FinishButton
+                    onClick={() => {
+                        if (readOnly && onReadOnlyInteract) {
+                            onReadOnlyInteract();
+                        } else {
+                            dispatch(finishRun(playbookRun?.team_id || '', playbookRun?.id));
+                        }
+                    }}
+                >
+                    {formatMessage({defaultMessage: 'Finish run'})}
+                </FinishButton>
+            }
+            <RHSGiveFeedbackButton/>
+            {showRunDetailsChecklistsStep && (
+                <TutorialTourTip
+                    title={<FormattedMessage defaultMessage='Track progress and ownership'/>}
+                    screen={<FormattedMessage defaultMessage='Assign, check off, or skip tasks to ensure the team is clear on how to move toward the finish line together.'/>}
+                    tutorialCategory={TutorialTourCategories.RUN_DETAILS}
+                    step={RunDetailsTutorialSteps.Checklists}
+                    showOptOut={false}
+                    placement='left'
+                    pulsatingDotPlacement='top-start'
+                    pulsatingDotTranslate={{x: 0, y: 0}}
+                    width={352}
+                    autoTour={true}
+                    punchOut={checklistsPunchout}
+                    telemetryTag={`tutorial_tip_Playbook_Run_Details_${RunDetailsTutorialSteps.Checklists}_Checklists`}
+                />
+            )}
         </InnerContainer>
     );
 };
@@ -327,6 +414,12 @@ const makeFilterOptions = (filter: ChecklistItemsFilter, name: string): Checkbox
             display: 'Show checked tasks',
             value: 'checked',
             selected: filter.checked,
+            disabled: filter.all,
+        },
+        {
+            display: 'Show skipped tasks',
+            value: 'skipped',
+            selected: filter.skipped,
             disabled: filter.all,
         },
         {

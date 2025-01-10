@@ -1,7 +1,7 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useCallback, ComponentProps} from 'react';
+import React, {ComponentProps, useCallback, useMemo} from 'react';
 import {FormattedMessage, useIntl} from 'react-intl';
 
 import {useDispatch} from 'react-redux';
@@ -9,7 +9,7 @@ import {useDispatch} from 'react-redux';
 import {getProfilesInTeam, searchProfiles} from 'mattermost-redux/actions/users';
 
 import styled from 'styled-components';
-import {PlayIcon, AccountPlusOutlineIcon} from '@mattermost/compass-icons/components';
+import {AccountMinusOutlineIcon, AccountPlusOutlineIcon, PlayIcon} from '@mattermost/compass-icons/components';
 
 import {FullPlaybook, Loaded, useUpdatePlaybook} from 'src/graphql/hooks';
 
@@ -17,13 +17,14 @@ import {Section, SectionTitle} from 'src/components/backstage/playbook_edit/styl
 import {InviteUsers} from 'src/components/backstage/playbook_edit/automation/invite_users';
 import {AutoAssignOwner} from 'src/components/backstage/playbook_edit/automation/auto_assign_owner';
 import {WebhookSetting} from 'src/components/backstage/playbook_edit/automation/webhook_setting';
-import {CategorizePlaybookRun} from 'src/components/backstage/playbook_edit/automation/categorize_playbook_run';
 import {CreateAChannel} from 'src/components/backstage/playbook_edit/automation/channel_access';
 import {PROFILE_CHUNK_SIZE} from 'src/constants';
-import MarkdownEdit from 'src/components/markdown_edit';
-import {Toggle} from '../../playbook_edit/automation/toggle';
-import {AutomationTitle} from '../../playbook_edit/automation/styles';
+
+import {Toggle} from 'src/components/backstage/playbook_edit/automation/toggle';
+import {AutomationTitle} from 'src/components/backstage/playbook_edit/automation/styles';
+
 import {useProxyState} from 'src/hooks';
+import {getDistinctAssignees} from 'src/utils';
 
 interface Props {
     playbook: Loaded<FullPlaybook>;
@@ -42,8 +43,14 @@ const LegacyActionsEdit = ({playbook}: Props) => {
         updatePlaybook({
             createPublicPlaybookRun: update.create_public_playbook_run,
             channelNameTemplate: update.channel_name_template,
+            channelMode: update.channel_mode,
+            channelId: update.channel_id,
         });
     }, [updatePlaybook]));
+
+    const preAssignees = useMemo(() => {
+        return getDistinctAssignees(playbook.checklists);
+    }, [playbook.checklists]);
 
     const searchUsers = (term: string) => {
         return dispatch(searchProfiles(term, {team_id: playbook.team_id}));
@@ -65,6 +72,53 @@ const LegacyActionsEdit = ({playbook}: Props) => {
         const idx = playbook.invited_user_ids.indexOf(userId);
         updatePlaybook({
             invitedUserIDs: [...playbook.invited_user_ids.slice(0, idx), ...playbook.invited_user_ids.slice(idx + 1)],
+        });
+    };
+
+    const handleRemovePreAssignedUserInvited = (userId: string) => {
+        // Iterate all checklists and their tasks and unassign the given user from all tasks
+        const checklists = playbook.checklists.map((cl) => ({
+            ...cl,
+            items: cl.items.map((ci) => ({
+                title: ci.title,
+                description: ci.description,
+                state: ci.state,
+                stateModified: ci.state_modified || 0,
+                assigneeID: ci.assignee_id === userId ? '' : ci.assignee_id || '',
+                assigneeModified: ci.assignee_modified || 0,
+                command: ci.command,
+                commandLastRun: ci.command_last_run,
+                dueDate: ci.due_date,
+                taskActions: ci.task_actions,
+            })),
+        }));
+        const idx = playbook.invited_user_ids.indexOf(userId);
+        updatePlaybook({
+            checklists,
+            invitedUserIDs: [...playbook.invited_user_ids.slice(0, idx), ...playbook.invited_user_ids.slice(idx + 1)],
+        });
+    };
+
+    const handleRemovePreAssignedUsers = () => {
+        // Iterate all checklists and their tasks and unassign all assignees
+        const checklists = playbook.checklists.map((cl) => ({
+            ...cl,
+            items: cl.items.map((ci) => ({
+                title: ci.title,
+                description: ci.description,
+                state: ci.state,
+                stateModified: ci.state_modified || 0,
+                assigneeID: '',
+                assigneeModified: ci.assignee_modified || 0,
+                command: ci.command,
+                commandLastRun: ci.command_last_run,
+                dueDate: ci.due_date,
+                taskActions: ci.task_actions,
+            })),
+        }));
+        updatePlaybook({
+            checklists,
+            inviteUsersEnabled: false,
         });
     };
 
@@ -100,20 +154,6 @@ const LegacyActionsEdit = ({playbook}: Props) => {
         });
     };
 
-    const handleToggleCategorizePlaybookRun = () => {
-        updatePlaybook({
-            categorizeChannelEnabled: !playbook.categorize_channel_enabled,
-        });
-    };
-
-    const handleCategoryNameChange = (categoryName: string) => {
-        if (playbook.category_name !== categoryName) {
-            updatePlaybook({
-                categoryName,
-            });
-        }
-    };
-
     return (
         <>
             <StyledSection>
@@ -121,7 +161,7 @@ const LegacyActionsEdit = ({playbook}: Props) => {
                     <PlayIcon size={24}/>
                     <FormattedMessage defaultMessage='When a run starts'/>
                 </StyledSectionTitle>
-                <Setting id={'create-channel'}>
+                <Setting id={'channel-action'}>
                     <CreateAChannel
                         playbook={playbookForCreateChannel}
                         setPlaybook={setPlaybookForCreateChannel}
@@ -135,8 +175,11 @@ const LegacyActionsEdit = ({playbook}: Props) => {
                         searchProfiles={searchUsers}
                         getProfiles={getUsers}
                         userIds={playbook.invited_user_ids}
+                        preAssignedUserIds={preAssignees}
                         onAddUser={handleAddUserInvited}
                         onRemoveUser={handleRemoveUserInvited}
+                        onRemovePreAssignedUser={handleRemovePreAssignedUserInvited}
+                        onRemovePreAssignedUsers={handleRemovePreAssignedUsers}
                     />
                 </Setting>
                 <Setting id={'assign-owner'}>
@@ -169,44 +212,48 @@ const LegacyActionsEdit = ({playbook}: Props) => {
                     />
                 </Setting>
             </StyledSection>
+
             <StyledSection>
                 <StyledSectionTitle>
                     <AccountPlusOutlineIcon size={22}/>
-                    <FormattedMessage defaultMessage='When a new member joins the channel'/>
+                    <FormattedMessage defaultMessage='When a participant joins the run'/>
                 </StyledSectionTitle>
-                <Setting id={'user-joins-message'}>
+                <Setting id={'participant-joins-run'}>
                     <AutomationTitle>
                         <Toggle
                             disabled={archived}
-                            isChecked={playbook.message_on_join_enabled}
+                            isChecked={playbook.create_channel_member_on_new_participant}
                             onChange={() => {
                                 updatePlaybook({
-                                    messageOnJoinEnabled: !playbook.message_on_join_enabled,
+                                    createChannelMemberOnNewParticipant: !playbook.create_channel_member_on_new_participant,
                                 });
                             }}
-                        />
-                        <div><FormattedMessage defaultMessage='Send a welcome message'/></div>
+                        >
+                            <FormattedMessage defaultMessage='Add them to the run channel'/>
+                        </Toggle>
                     </AutomationTitle>
-                    <MarkdownEdit
-                        placeholder={formatMessage({defaultMessage: 'Send a welcome message…'})}
-                        value={playbook.message_on_join}
-                        disabled={!playbook.message_on_join_enabled || archived}
-                        onSave={(messageOnJoin) => {
-                            updatePlaybook({
-                                messageOnJoin,
-                                messageOnJoinEnabled: Boolean(messageOnJoin.trim()),
-                            });
-                        }}
-                    />
                 </Setting>
-                <Setting id={'user-joins-channel-categorize'}>
-                    <CategorizePlaybookRun
-                        disabled={archived}
-                        enabled={playbook.categorize_channel_enabled}
-                        onToggle={handleToggleCategorizePlaybookRun}
-                        categoryName={playbook.category_name}
-                        onCategorySelected={handleCategoryNameChange}
-                    />
+            </StyledSection>
+
+            <StyledSection>
+                <StyledSectionTitle>
+                    <AccountMinusOutlineIcon size={22}/>
+                    <FormattedMessage defaultMessage='When a participant leaves the run'/>
+                </StyledSectionTitle>
+                <Setting id={'participant-leaves-run'}>
+                    <AutomationTitle>
+                        <Toggle
+                            disabled={archived}
+                            isChecked={playbook.remove_channel_member_on_removed_participant}
+                            onChange={() => {
+                                updatePlaybook({
+                                    removeChannelMemberOnRemovedParticipant: !playbook.remove_channel_member_on_removed_participant,
+                                });
+                            }}
+                        >
+                            <FormattedMessage defaultMessage='Remove them from the run channel'/>
+                        </Toggle>
+                    </AutomationTitle>
                 </Setting>
             </StyledSection>
         </>

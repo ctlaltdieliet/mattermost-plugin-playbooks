@@ -9,7 +9,7 @@ import RHSInfoOverview from 'src/components/backstage/playbook_runs/playbook_run
 import RHSInfoMetrics from 'src/components/backstage/playbook_runs/playbook_run/rhs_info_metrics';
 import RHSInfoActivity from 'src/components/backstage/playbook_runs/playbook_run/rhs_info_activity';
 import {Role} from 'src/components/backstage/playbook_runs/shared';
-import {PlaybookRun, PlaybookRunStatus, Metadata} from 'src/types/playbook_run';
+import {Metadata, PlaybookRun, PlaybookRunStatus} from 'src/types/playbook_run';
 import {PlaybookWithChecklist} from 'src/types/playbook';
 interface Props {
     run: PlaybookRun;
@@ -17,6 +17,7 @@ interface Props {
     runMetadata?: Metadata;
     role: Role;
     channel: Channel | undefined | null;
+    channelDeleted: boolean;
     followState: FollowState;
     onViewParticipants: () => void;
     onViewTimeline: () => void;
@@ -42,6 +43,7 @@ const RHSInfo = (props: Props) => {
                 onViewParticipants={props.onViewParticipants}
                 editable={editable}
                 channel={props.channel}
+                channelDeleted={props.channelDeleted}
                 followState={props.followState}
                 playbook={props.playbook}
             />

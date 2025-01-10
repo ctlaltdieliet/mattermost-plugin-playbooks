@@ -50,6 +50,8 @@ let config = {
             src: path.resolve(__dirname, './src/'),
             'mattermost-redux': path.resolve(__dirname, './node_modules/mattermost-webapp/packages/mattermost-redux/src/'),
             reselect: path.resolve(__dirname, './node_modules/mattermost-webapp/packages/reselect/src/index'),
+            '@mattermost/client': path.resolve(__dirname, './node_modules/mattermost-webapp/packages/client/src/'),
+            '@mattermost/components': path.resolve(__dirname, './node_modules/mattermost-webapp/packages/components/src/'),
         },
         modules: [
             'src',
@@ -88,19 +90,8 @@ let config = {
                 use: ['style-loader', 'css-loader'],
             },
             {
-                test: /\.(png|eot|tiff|svg|woff2|woff|ttf|gif|mp3|jpg)$/,
-                use: [
-                    {
-                        loader: 'file-loader',
-                        options: {
-                            name: 'files/[contenthash].[ext]',
-                        },
-                    },
-                    {
-                        loader: 'image-webpack-loader',
-                        options: {},
-                    },
-                ],
+                test: /\.(png|eot|tiff|svg|woff2|woff|ttf|gif|mp3|jpg|jpeg)$/,
+                type: 'asset/inline', // consider 'asset' when URL resource chunks are supported
             },
             {
                 test: /\.apng$/,
@@ -125,6 +116,7 @@ let config = {
         'react-bootstrap': 'ReactBootstrap',
         'react-router-dom': 'ReactRouterDom',
         'react-intl': 'ReactIntl',
+        'styled-components': 'StyledComponents',
     },
     output: {
         devtoolNamespace: PLUGIN_ID,

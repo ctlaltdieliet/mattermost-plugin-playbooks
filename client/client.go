@@ -16,9 +16,10 @@ import (
 	"strconv"
 
 	"github.com/google/go-querystring/query"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
+
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 const (
@@ -50,6 +51,8 @@ type Client struct {
 	Reminders *RemindersService
 	// Telemetry is a collection of methods used to interact with telemetry.
 	Telemetry *TelemetryService
+	// TabApp is a collection of methods used to interact with playbooks from the tabapp.
+	TabApp *TabAppService
 }
 
 // New creates a new instance of Client using the configuration from the given Mattermost Client.
@@ -77,12 +80,13 @@ func newClient(mattermostSiteURL string, httpClient *http.Client) (*Client, erro
 	c.Stats = &StatsService{c}
 	c.Reminders = &RemindersService{c}
 	c.Telemetry = &TelemetryService{c}
+	c.TabApp = &TabAppService{c}
 	return c, nil
 }
 
 // newRequest creates an API request, JSON-encoding any given body parameter.
 func (c *Client) newRequest(method, endpoint string, body interface{}) (*http.Request, error) {
-	u, err := c.BaseURL.Parse(buildAPIURL(endpoint))
+	u, err := c.BaseURL.Parse(endpoint)
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid endpoint %s", endpoint)
 	}
@@ -110,6 +114,11 @@ func (c *Client) newRequest(method, endpoint string, body interface{}) (*http.Re
 		req.Header.Set("User-Agent", c.UserAgent)
 	}
 	return req, nil
+}
+
+// newAPIRequest creates an API request, JSON-encoding any given body parameter.
+func (c *Client) newAPIRequest(method, endpoint string, body interface{}) (*http.Request, error) {
+	return c.newRequest(method, buildAPIURL(endpoint), body)
 }
 
 // buildAPIURL constructs the path to the given endpoint.
@@ -176,7 +185,7 @@ type GraphQLInput struct {
 
 func (c *Client) DoGraphql(ctx context.Context, input *GraphQLInput, v interface{}) error {
 	url := "query"
-	req, err := c.newRequest(http.MethodPost, url, input)
+	req, err := c.newAPIRequest(http.MethodPost, url, input)
 	if err != nil {
 		return err
 	}

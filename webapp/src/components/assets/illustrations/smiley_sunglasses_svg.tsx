@@ -3,9 +3,9 @@
 
 import React from 'react';
 
-import Svg from '../svg';
+import Svg from 'src/components/assets/svg';
 
-const SmileySunglasses = (props: {className?: string}) => (
+const SmileySunglasses = () => (
     <Svg
         width='62'
         height='60'

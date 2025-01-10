@@ -5,48 +5,49 @@
 package mock_app
 
 import (
-	gomock "github.com/golang/mock/gomock"
-	cluster "github.com/mattermost/mattermost-plugin-api/cluster"
 	reflect "reflect"
 	time "time"
+
+	gomock "github.com/golang/mock/gomock"
+	cluster "github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 )
 
-// MockJobOnceScheduler is a mock of JobOnceScheduler interface
+// MockJobOnceScheduler is a mock of JobOnceScheduler interface.
 type MockJobOnceScheduler struct {
 	ctrl     *gomock.Controller
 	recorder *MockJobOnceSchedulerMockRecorder
 }
 
-// MockJobOnceSchedulerMockRecorder is the mock recorder for MockJobOnceScheduler
+// MockJobOnceSchedulerMockRecorder is the mock recorder for MockJobOnceScheduler.
 type MockJobOnceSchedulerMockRecorder struct {
 	mock *MockJobOnceScheduler
 }
 
-// NewMockJobOnceScheduler creates a new mock instance
+// NewMockJobOnceScheduler creates a new mock instance.
 func NewMockJobOnceScheduler(ctrl *gomock.Controller) *MockJobOnceScheduler {
 	mock := &MockJobOnceScheduler{ctrl: ctrl}
 	mock.recorder = &MockJobOnceSchedulerMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockJobOnceScheduler) EXPECT() *MockJobOnceSchedulerMockRecorder {
 	return m.recorder
 }
 
-// Cancel mocks base method
+// Cancel mocks base method.
 func (m *MockJobOnceScheduler) Cancel(arg0 string) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Cancel", arg0)
 }
 
-// Cancel indicates an expected call of Cancel
+// Cancel indicates an expected call of Cancel.
 func (mr *MockJobOnceSchedulerMockRecorder) Cancel(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockJobOnceScheduler)(nil).Cancel), arg0)
 }
 
-// ListScheduledJobs mocks base method
+// ListScheduledJobs mocks base method.
 func (m *MockJobOnceScheduler) ListScheduledJobs() ([]cluster.JobOnceMetadata, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListScheduledJobs")
@@ -55,42 +56,42 @@ func (m *MockJobOnceScheduler) ListScheduledJobs() ([]cluster.JobOnceMetadata, e
 	return ret0, ret1
 }
 
-// ListScheduledJobs indicates an expected call of ListScheduledJobs
+// ListScheduledJobs indicates an expected call of ListScheduledJobs.
 func (mr *MockJobOnceSchedulerMockRecorder) ListScheduledJobs() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListScheduledJobs", reflect.TypeOf((*MockJobOnceScheduler)(nil).ListScheduledJobs))
 }
 
-// ScheduleOnce mocks base method
-func (m *MockJobOnceScheduler) ScheduleOnce(arg0 string, arg1 time.Time) (*cluster.JobOnce, error) {
+// ScheduleOnce mocks base method.
+func (m *MockJobOnceScheduler) ScheduleOnce(arg0 string, arg1 time.Time, arg2 interface{}) (*cluster.JobOnce, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ScheduleOnce", arg0, arg1)
+	ret := m.ctrl.Call(m, "ScheduleOnce", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*cluster.JobOnce)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ScheduleOnce indicates an expected call of ScheduleOnce
-func (mr *MockJobOnceSchedulerMockRecorder) ScheduleOnce(arg0, arg1 interface{}) *gomock.Call {
+// ScheduleOnce indicates an expected call of ScheduleOnce.
+func (mr *MockJobOnceSchedulerMockRecorder) ScheduleOnce(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleOnce", reflect.TypeOf((*MockJobOnceScheduler)(nil).ScheduleOnce), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleOnce", reflect.TypeOf((*MockJobOnceScheduler)(nil).ScheduleOnce), arg0, arg1, arg2)
 }
 
-// SetCallback mocks base method
-func (m *MockJobOnceScheduler) SetCallback(arg0 func(string)) error {
+// SetCallback mocks base method.
+func (m *MockJobOnceScheduler) SetCallback(arg0 func(string, interface{})) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetCallback", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetCallback indicates an expected call of SetCallback
+// SetCallback indicates an expected call of SetCallback.
 func (mr *MockJobOnceSchedulerMockRecorder) SetCallback(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCallback", reflect.TypeOf((*MockJobOnceScheduler)(nil).SetCallback), arg0)
 }
 
-// Start mocks base method
+// Start mocks base method.
 func (m *MockJobOnceScheduler) Start() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Start")
@@ -98,7 +99,7 @@ func (m *MockJobOnceScheduler) Start() error {
 	return ret0
 }
 
-// Start indicates an expected call of Start
+// Start indicates an expected call of Start.
 func (mr *MockJobOnceSchedulerMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockJobOnceScheduler)(nil).Start))

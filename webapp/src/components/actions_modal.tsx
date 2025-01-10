@@ -9,7 +9,7 @@ import styled from 'styled-components';
 
 import {LightningBoltOutlineIcon} from '@mattermost/compass-icons/components';
 
-import GenericModal, {ModalSubheading, DefaultFooterContainer} from 'src/components/widgets/generic_modal';
+import GenericModal, {DefaultFooterContainer, ModalSubheading} from 'src/components/widgets/generic_modal';
 
 interface Props {
     id: string;
@@ -21,6 +21,7 @@ interface Props {
     onSave: () => void;
     children: React.ReactNode;
     isValid: boolean;
+    autoCloseOnConfirmButton?: boolean;
 }
 
 const ActionsModal = (props: Props) => {
@@ -34,12 +35,12 @@ const ActionsModal = (props: Props) => {
                     color={'rgba(var(--center-channel-color-rgb), 0.56)'}
                 />
             </IconWrapper>
-            <div>
+            <ModalTitle>
                 {props.title}
                 <ModalSubheading>
                     {props.subtitle}
                 </ModalSubheading>
-            </div>
+            </ModalTitle>
         </Header>
     );
 
@@ -69,7 +70,7 @@ const ActionsModal = (props: Props) => {
             confirmButtonClassName={props.isValid ? '' : 'disabled'}
             isConfirmDestructive={false}
             autoCloseOnCancelButton={true}
-            autoCloseOnConfirmButton={false}
+            autoCloseOnConfirmButton={props.autoCloseOnConfirmButton ?? false}
             enforceFocus={true}
             components={{
                 Header: ModalHeader,
@@ -84,21 +85,22 @@ const ActionsModal = (props: Props) => {
 const ModalHeader = styled(Modal.Header)`
     &&&& {
         margin-bottom: 0;
+        padding-top: 24px;
+        padding-bottom: 20px;
     }
 `;
 
 const StyledModal = styled(GenericModal)`
     .modal-body {
-        :before {
-            content: '';
-            height: 1px;
-            width: 600px;
-            position: absolute;
-            left: -24px;
-            top: 0px;
-            background: rgba(var(--center-channel-color-rgb), 0.08);
-        }
+        border-top: var(--border-default);
     }
+`;
+
+const ModalTitle = styled.div`
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 20px;
+    margin-top: 4px;
 `;
 
 const ModalFooter = styled(DefaultFooterContainer)`
@@ -119,52 +121,25 @@ const ModalFooter = styled(DefaultFooterContainer)`
     }
 `;
 
-const renderThumbVertical = ({style, ...props}: any) => (
-    <div
-        {...props}
-        style={{
-            ...style,
-            width: '4px',
-            background: 'var(--center-channel-color)',
-            opacity: '0.24',
-            borderRadius: '4px',
-            position: 'fixed',
-            right: '8px',
-        }}
-    />
-);
-
-const renderTrackVertical = ({style, ...props}: any) => (
-    <div
-        {...props}
-        style={{
-            ...style,
-            paddingTop: '8px',
-            paddingBottom: '8px',
-
-            // The following three props are needed to actually render the track;
-            // without them, the scrollbar disappears
-            height: '100%',
-            top: '0',
-            right: '0',
-        }}
-    />
-);
-
 const Header = styled.div`
     display: flex;
     flex-direction: row;
 `;
 
 const IconWrapper = styled.div`
-    margin-right: 14px;
-    margin-top: 2px;
+    margin-right: 12px;
+    margin-left: -4px;
 `;
 
 export const TriggersContainer = styled.div`
     display: flex;
     flex-direction: column;
     row-gap: 16px;
+    @media screen and (max-height: 900px) {
+        max-height: 500px;
+        overflow-x: hidden;
+        overflow-y: scroll;
+    }
 `;
 
 export const ActionsContainer = styled.div`

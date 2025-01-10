@@ -5,15 +5,11 @@ import React, {useState} from 'react';
 import {useUpdateEffect} from 'react-use';
 import {DateTime} from 'luxon';
 import styled, {css} from 'styled-components';
-
 import {getTeam} from 'mattermost-redux/selectors/entities/teams';
 import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
-
 import {GlobalState} from '@mattermost/types/store';
 import {BullhornOutlineIcon} from '@mattermost/compass-icons/components';
-
 import {useSelector} from 'react-redux';
-
 import {FormattedMessage, useIntl} from 'react-intl';
 
 import {PlaybookRun} from 'src/types/playbook_run';
@@ -21,16 +17,15 @@ import FormattedDuration from 'src/components/formatted_duration';
 import {navigateToPluginUrl} from 'src/browser_routing';
 import Profile from 'src/components/profile/profile';
 import StatusBadge, {BadgeType} from 'src/components/backstage/status_badge';
-import {TertiaryButton, SecondaryButton} from 'src/components/assets/buttons';
-
+import {SecondaryButton, TertiaryButton} from 'src/components/assets/buttons';
+import {PlaybookRunEventTarget} from 'src/types/telemetry';
 import {findLastUpdatedWithDefault} from 'src/utils';
 import {usePlaybookName, useRunMetadata} from 'src/hooks';
-import {
-    unfollowPlaybookRun,
-    followPlaybookRun,
-} from 'src/client';
-import {InfoLine} from '../styles';
-import {ToastType, useToaster} from '../toast_banner';
+import {followPlaybookRun, telemetryEvent, unfollowPlaybookRun} from 'src/client';
+
+import {InfoLine} from 'src/components/backstage/styles';
+import {useToaster} from 'src/components/backstage/toast_banner';
+import {ToastStyle} from 'src/components/backstage/toast';
 
 const SmallText = styled.div`
     font-weight: 400;
@@ -99,7 +94,12 @@ const Row = (props: Props) => {
 
     let infoLine: React.ReactNode = null;
     if (!props.fixedTeam) {
-        infoLine = <InfoLine>{playbookName ? teamName + ' • ' + playbookName : teamName}</InfoLine>;
+        infoLine = (
+            <InfoLine>
+                {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
+                {playbookName ? teamName + ' • ' + playbookName : teamName}
+            </InfoLine>
+        );
     }
 
     function openPlaybookRunDetails(playbookRun: PlaybookRun) {
@@ -167,6 +167,7 @@ const formatDate = (millis: number) => {
 
 export default Row;
 
+// TODO: this should converge with src/hooks/run : useFollowRun
 const FollowPlaybookRun = ({id}: {id: string}) => {
     const {formatMessage} = useIntl();
     const currentUser = useSelector(getCurrentUser);
@@ -183,15 +184,23 @@ const FollowPlaybookRun = ({id}: {id: string}) => {
 
     const toggleFollow = () => {
         const action = isFollowing ? unfollowPlaybookRun : followPlaybookRun;
+        const eventTarget = isFollowing ? PlaybookRunEventTarget.Unfollow : PlaybookRunEventTarget.Follow;
         action(id)
             .then(() => {
                 const newFollowers = isFollowing ? followers.filter((userId) => userId !== currentUser.id) : [...followers, currentUser.id];
                 setIsFollowing(!isFollowing);
                 setFollowers(newFollowers);
+                telemetryEvent(eventTarget, {
+                    playbookrun_id: id,
+                    from: 'run_list',
+                });
             })
             .catch(() => {
                 setIsFollowing(isFollowing);
-                addToast(formatMessage({defaultMessage: 'It was not possible to {isFollowing, select, true {unfollow} other {follow}} the run'}, {isFollowing}), ToastType.Failure);
+                addToast({
+                    content: formatMessage({defaultMessage: 'It was not possible to {isFollowing, select, true {unfollow} other {follow}} the run'}, {isFollowing}),
+                    toastStyle: ToastStyle.Failure,
+                });
             });
     };
 

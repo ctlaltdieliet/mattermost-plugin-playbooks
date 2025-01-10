@@ -3,9 +3,9 @@
 
 import React from 'react';
 
-import Svg from '../svg';
+import Svg from 'src/components/assets/svg';
 
-const BugSearch = (props: {className?: string}) => (
+const BugSearch = () => (
     <Svg
         width='65'
         height='68'

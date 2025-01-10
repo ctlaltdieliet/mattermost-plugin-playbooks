@@ -5,16 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/mattermost/mattermost-plugin-playbooks/client"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/client"
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 )
 
 func TestPlaybooks(t *testing.T) {
@@ -22,64 +25,31 @@ func TestPlaybooks(t *testing.T) {
 	e.CreateClients()
 	e.CreateBasicServer()
 
-	t.Run("unlicenced servers can't create a private playbook", func(t *testing.T) {
-		id, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
-			Title:  "test1",
-			TeamID: e.BasicTeam.Id,
-			Public: false,
-		})
-		requireErrorWithStatusCode(t, err, http.StatusForbidden)
-		assert.Empty(t, id)
-	})
-
-	t.Run("create public playbook, unlicensed with zero pre-existing playbooks in the team, should succeed", func(t *testing.T) {
+	t.Run("create public playbook with zero pre-existing playbooks in the team, should succeed", func(t *testing.T) {
 		_, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
 			Title:  "test1",
 			TeamID: e.BasicTeam.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
-	t.Run("create public playbook, unlicensed with one pre-existing playbook in the team, should succeed", func(t *testing.T) {
+	t.Run("create public playbook with one pre-existing playbook in the team, should succeed", func(t *testing.T) {
 		_, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
 			Title:  "test2",
 			TeamID: e.BasicTeam.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
-	e.SetE10Licence()
-
-	t.Run("create playbook, e10 licenced with one pre-existing playbook in the team, should now succeed", func(t *testing.T) {
-		_, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
-			Title:  "test2",
-			TeamID: e.BasicTeam.Id,
-			Public: true,
-		})
-		assert.Nil(t, err)
-	})
-
-	t.Run("e10 licenced servers can't create private playbooks", func(t *testing.T) {
-		id, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
-			Title:  "test3",
-			TeamID: e.BasicTeam.Id,
-			Public: false,
-		})
-		requireErrorWithStatusCode(t, err, http.StatusForbidden)
-		assert.Empty(t, id)
-	})
-
-	e.SetE20Licence()
-
-	t.Run("e20 licenced servers can create private playbooks", func(t *testing.T) {
+	t.Run("can create private playbooks", func(t *testing.T) {
 		_, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
 			Title:  "test4",
 			TeamID: e.BasicTeam.Id,
 			Public: false,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	t.Run("create playbook with no permissions to broadcast channel", func(t *testing.T) {
@@ -97,18 +67,18 @@ func TestPlaybooks(t *testing.T) {
 			Title:  "test6 - to be archived",
 			TeamID: e.BasicTeam.Id,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		playbook, err := e.PlaybooksClient.Playbooks.Get(context.Background(), id)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Make sure we /can/ update
 		playbook.Title = "New Title!"
 		err = e.PlaybooksClient.Playbooks.Update(context.Background(), *playbook)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		err = e.PlaybooksClient.Playbooks.Archive(context.Background(), id)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Test that we cannot update an archived playbook
 		playbook.Title = "Another title"
@@ -131,14 +101,14 @@ func TestPlaybooks(t *testing.T) {
 			TeamID: e.BasicTeam.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotEmpty(t, id)
 
 		id, err = e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
 			Title:  "SearchTest 2 -- only regular user access",
 			TeamID: e.BasicTeam.Id,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotEmpty(t, id)
 
 		id, err = e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
@@ -146,7 +116,7 @@ func TestPlaybooks(t *testing.T) {
 			TeamID: e.BasicTeam.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotEmpty(t, id)
 
 		id, err = e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
@@ -154,43 +124,43 @@ func TestPlaybooks(t *testing.T) {
 			TeamID: e.BasicTeam2.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotEmpty(t, id)
 
 		playbookResults, err := e.PlaybooksClient.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "SearchTest",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 4, playbookResults.TotalCount)
 
 		playbookResults, err = e.PlaybooksClient.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "SearchTest 2",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 1, playbookResults.TotalCount)
 
 		playbookResults, err = e.PlaybooksClient.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "ümber",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 1, playbookResults.TotalCount)
 
 		playbookResults, err = e.PlaybooksClient.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "よこそ",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 1, playbookResults.TotalCount)
 
 		playbookResults, err = e.PlaybooksClient2.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "SearchTest",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 2, playbookResults.TotalCount)
 
 		playbookResults, err = e.PlaybooksClient2.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "ümberdå",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 1, playbookResults.TotalCount)
 	})
 
@@ -200,7 +170,7 @@ func TestPlaybooks(t *testing.T) {
 			TeamID: e.BasicTeam.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotEmpty(t, id)
 
 		id, err = e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
@@ -208,7 +178,7 @@ func TestPlaybooks(t *testing.T) {
 			TeamID: e.BasicTeam.Id,
 			Public: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotEmpty(t, id)
 		err = e.PlaybooksClient.Playbooks.Archive(context.Background(), id)
 		assert.NoError(t, err)
@@ -216,16 +186,48 @@ func TestPlaybooks(t *testing.T) {
 		playbookResults, err := e.PlaybooksClient.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam: "ArchiveTest",
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 1, playbookResults.TotalCount)
 
 		playbookResults, err = e.PlaybooksClient.Playbooks.List(context.Background(), "", 0, 10, client.PlaybookListOptions{
 			SearchTeam:   "ArchiveTest",
 			WithArchived: true,
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 2, playbookResults.TotalCount)
 
+	})
+
+	t.Run("create playbook with valid user list", func(t *testing.T) {
+		_, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+			Title:          "pre-assigned-test1",
+			TeamID:         e.BasicTeam.Id,
+			Public:         true,
+			InvitedUserIDs: []string{e.RegularUser.Id},
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("create playbook with pre-assigned task, valid user list, and invitations enabled", func(t *testing.T) {
+		_, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+			Title:  "pre-assigned-test2",
+			TeamID: e.BasicTeam.Id,
+			Public: true,
+			Checklists: []client.Checklist{
+				{
+					Title: "A",
+					Items: []client.ChecklistItem{
+						{
+							Title:      "Do this1",
+							AssigneeID: e.RegularUser.Id,
+						},
+					},
+				},
+			},
+			InvitedUserIDs:     []string{e.RegularUser.Id},
+			InviteUsersEnabled: true,
+		})
+		assert.NoError(t, err)
 	})
 }
 
@@ -233,6 +235,73 @@ func TestCreateInvalidPlaybook(t *testing.T) {
 	e := Setup(t)
 	e.CreateClients()
 	e.CreateBasicServer()
+
+	t.Run("fails if pre-assigned task is added but invitations are disabled", func(t *testing.T) {
+		id, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+			Title:  "fail-pre-assigned-test1",
+			TeamID: e.BasicTeam.Id,
+			Public: true,
+			Checklists: []client.Checklist{
+				{
+					Title: "A",
+					Items: []client.ChecklistItem{
+						{
+							Title:      "Do this1",
+							AssigneeID: e.RegularUser.Id,
+						},
+					},
+				},
+			},
+			InvitedUserIDs: []string{e.RegularUser.Id},
+		})
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+		assert.Empty(t, id)
+	})
+
+	t.Run("fails if pre-assigned task is added but existing invite user list is missing assignee", func(t *testing.T) {
+		id, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+			Title:  "fail-pre-assigned-test2",
+			TeamID: e.BasicTeam.Id,
+			Public: true,
+			Checklists: []client.Checklist{
+				{
+					Title: "A",
+					Items: []client.ChecklistItem{
+						{
+							Title:      "Do this1",
+							AssigneeID: e.RegularUser.Id,
+						},
+					},
+				},
+			},
+			InviteUsersEnabled: true,
+		})
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+		assert.Empty(t, id)
+	})
+
+	t.Run("fails if pre-assigned task is added but assignee is missing in invite user list", func(t *testing.T) {
+		id, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+			Title:  "fail-pre-assigned-test3",
+			TeamID: e.BasicTeam.Id,
+			Public: true,
+			Checklists: []client.Checklist{
+				{
+					Title: "A",
+					Items: []client.ChecklistItem{
+						{
+							Title:      "Do this1",
+							AssigneeID: e.RegularUser.Id,
+						},
+					},
+				},
+			},
+			InvitedUserIDs:     []string{e.RegularUser2.Id},
+			InviteUsersEnabled: true,
+		})
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+		assert.Empty(t, id)
+	})
 
 	t.Run("fails if json is larger than 256K", func(t *testing.T) {
 		id, err := e.PlaybooksClient.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
@@ -306,6 +375,101 @@ func TestPlaybookUpdate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("fails if pre-assigned task is added but invitations are disabled", func(t *testing.T) {
+		e.BasicPlaybook.InvitedUserIDs = []string{e.RegularUser2.Id}
+		e.BasicPlaybook.Checklists = []client.Checklist{
+			{
+				Title: "A",
+				Items: []client.ChecklistItem{
+					{
+						Title:      "Do this1",
+						AssigneeID: e.RegularUser2.Id,
+					},
+				},
+			},
+		}
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+	})
+
+	t.Run("fails if pre-assigned task is added but existing invite user list is missing assignee", func(t *testing.T) {
+		e.BasicPlaybook.InviteUsersEnabled = true
+		e.BasicPlaybook.Checklists = []client.Checklist{
+			{
+				Title: "A",
+				Items: []client.ChecklistItem{
+					{
+						Title:      "Do this1",
+						AssigneeID: e.RegularUser.Id,
+					},
+				},
+			},
+		}
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+	})
+
+	t.Run("fails if pre-assigned task is added but assignee is missing in updated invite user list", func(t *testing.T) {
+		e.BasicPlaybook.InviteUsersEnabled = true
+		e.BasicPlaybook.InvitedUserIDs = []string{e.RegularUser2.Id}
+		e.BasicPlaybook.Checklists = []client.Checklist{
+			{
+				Title: "A",
+				Items: []client.ChecklistItem{
+					{
+						Title:      "Do this1",
+						AssigneeID: e.RegularUser.Id,
+					},
+				},
+			},
+		}
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+	})
+
+	t.Run("update playbook with pre-assigned task, valid invite user list, and invitations enabled", func(t *testing.T) {
+		e.BasicPlaybook.InviteUsersEnabled = true
+		e.BasicPlaybook.InvitedUserIDs = []string{e.RegularUser.Id}
+		e.BasicPlaybook.Checklists = []client.Checklist{
+			{
+				Title: "A",
+				Items: []client.ChecklistItem{
+					{
+						Title:      "Do this1",
+						AssigneeID: e.RegularUser.Id,
+					},
+				},
+			},
+		}
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.NoError(t, err)
+	})
+
+	t.Run("update playbook with valid invite user list", func(t *testing.T) {
+		e.BasicPlaybook.InvitedUserIDs = append(e.BasicPlaybook.InvitedUserIDs, e.RegularUser2.Id)
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.NoError(t, err)
+	})
+
+	t.Run("fails if invite user list is updated but is missing pre-assigned users", func(t *testing.T) {
+		e.BasicPlaybook.InvitedUserIDs = []string{}
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+	})
+
+	t.Run("fails if invitations are getting disabled but there are pre-assigned users", func(t *testing.T) {
+		e.BasicPlaybook.InviteUsersEnabled = false
+
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+	})
+
 	t.Run("update playbook with too many webhoooks", func(t *testing.T) {
 		urls := []string{}
 		for i := 0; i < 65; i++ {
@@ -315,6 +479,36 @@ func TestPlaybookUpdate(t *testing.T) {
 		e.BasicPlaybook.WebhookOnCreationURLs = urls
 		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
 		requireErrorWithStatusCode(t, err, http.StatusBadRequest)
+	})
+}
+
+func TestPlaybookUpdateCrossTeam(t *testing.T) {
+	e := Setup(t)
+	e.CreateBasic()
+
+	t.Run("update playbook properties not in team public playbook", func(t *testing.T) {
+		e.BasicPlaybook.Description = "This is the updated description"
+		err := e.PlaybooksClientNotInTeam.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusForbidden)
+	})
+
+	t.Run("lost acccess to playbook", func(t *testing.T) {
+		e.BasicPlaybook.Description = "This is the updated description"
+		e.BasicPlaybook.Members = append(e.BasicPlaybook.Members,
+			client.PlaybookMember{
+				UserID: e.RegularUserNotInTeam.Id,
+				Roles:  []string{app.PlaybookRoleMember},
+			})
+		uperr := e.PlaybooksAdminClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.NoError(t, uperr)
+		err := e.PlaybooksClientNotInTeam.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		requireErrorWithStatusCode(t, err, http.StatusForbidden)
+	})
+
+	t.Run("update playbook properties in team public playbook", func(t *testing.T) {
+		e.BasicPlaybook.Description = "This is the updated description"
+		err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.NoError(t, err)
 	})
 }
 
@@ -929,26 +1123,8 @@ func TestPlaybooksConversions(t *testing.T) {
 
 		e.Permissions.AddPermissionToRole(model.PermissionPublicPlaybookMakePrivate.Id, model.PlaybookMemberRoleId)
 
-		t.Run("E0", func(t *testing.T) {
-			e.RemoveLicence()
-
-			err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
-			requireErrorWithStatusCode(t, err, http.StatusForbidden)
-		})
-
-		t.Run("E10", func(t *testing.T) {
-			e.SetE10Licence()
-
-			err := e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
-			requireErrorWithStatusCode(t, err, http.StatusForbidden)
-		})
-
-		t.Run("E20", func(t *testing.T) {
-			e.SetE20Licence()
-
-			err = e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
-			require.NoError(t, err)
-		})
+		err = e.PlaybooksClient.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.NoError(t, err)
 	})
 
 	t.Run("private to public conversion", func(t *testing.T) {
@@ -1037,33 +1213,9 @@ func TestAddPostToTimeline(t *testing.T) {
 	dialogRequestBytes, err := json.Marshal(dialogRequest)
 	require.NoError(t, err)
 
-	t.Run("unlicensed server", func(t *testing.T) {
-		// Make sure there is no license
-		e.RemoveLicence()
-
-		// Post the request with the dialog payload and verify it is not allowed
-		resp, err := e.ServerClient.DoAPIRequestBytes("POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/add-to-timeline-dialog", dialogRequestBytes, "")
-		require.Error(t, err)
-		require.Equal(t, http.StatusForbidden, resp.StatusCode)
-	})
-
-	t.Run("E10 server", func(t *testing.T) {
-		// Set an E10 license
-		e.SetE10Licence()
-
-		// Post the request with the dialog payload and verify it is allowed
-		_, err := e.ServerClient.DoAPIRequestBytes("POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/add-to-timeline-dialog", dialogRequestBytes, "")
-		require.NoError(t, err)
-	})
-
-	t.Run("E20 server", func(t *testing.T) {
-		// Set an E20 license
-		e.SetE20Licence()
-
-		// Post the request with the dialog payload and verify it is allowed
-		_, err := e.ServerClient.DoAPIRequestBytes("POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/add-to-timeline-dialog", dialogRequestBytes, "")
-		require.NoError(t, err)
-	})
+	// Post the request with the dialog payload and verify it is allowed
+	_, err = e.ServerClient.DoAPIRequestBytes(context.Background(), "POST", e.ServerClient.URL+"/plugins/"+manifest.Id+"/api/v0/runs/add-to-timeline-dialog", dialogRequestBytes, "")
+	require.NoError(t, err)
 }
 
 func TestPlaybookStats(t *testing.T) {
@@ -1073,32 +1225,9 @@ func TestPlaybookStats(t *testing.T) {
 	e.SetE20Licence()
 	e.CreateBasicPlaybook()
 
-	t.Run("unlicensed server", func(t *testing.T) {
-		// Make sure there is no license
-		e.RemoveLicence()
-
-		// Verify that retrieving stats is not allowed
-		_, err := e.PlaybooksClient.Playbooks.Stats(context.Background(), e.BasicPlaybook.ID)
-		requireErrorWithStatusCode(t, err, http.StatusForbidden)
-	})
-
-	t.Run("E10 server", func(t *testing.T) {
-		// Set an E10 license
-		e.SetE10Licence()
-
-		// Verify that ertrieving stats is not allowed
-		_, err := e.PlaybooksClient.Playbooks.Stats(context.Background(), e.BasicPlaybook.ID)
-		requireErrorWithStatusCode(t, err, http.StatusForbidden)
-	})
-
-	t.Run("E20 server", func(t *testing.T) {
-		// Set an E20 license
-		e.SetE20Licence()
-
-		// Verify that retrieving stats is allowed
-		_, err := e.PlaybooksClient.Playbooks.Stats(context.Background(), e.BasicPlaybook.ID)
-		require.NoError(t, err)
-	})
+	// Verify that retrieving stats is allowed
+	_, err := e.PlaybooksClient.Playbooks.Stats(context.Background(), e.BasicPlaybook.ID)
+	require.NoError(t, err)
 }
 
 func TestPlaybookGetAutoFollows(t *testing.T) {
@@ -1196,6 +1325,9 @@ func TestPlaybookGetAutoFollows(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, c.expectedTotalCount, len(res))
+
+				sort.Strings(res)
+				sort.Strings(c.expectedFollowers)
 				require.Equal(t, c.expectedFollowers, res)
 			}
 		})
@@ -1215,7 +1347,6 @@ func TestPlaybookChecklistCleanup(t *testing.T) {
 				Items: []client.ChecklistItem{
 					{
 						Title:            "title1",
-						AssigneeID:       "id1",
 						AssigneeModified: 101,
 						State:            "Closed",
 						StateModified:    102,
@@ -1234,7 +1365,6 @@ func TestPlaybookChecklistCleanup(t *testing.T) {
 				Items: []client.ChecklistItem{
 					{
 						Title:            "title1",
-						AssigneeID:       "",
 						AssigneeModified: 0,
 						State:            "",
 						StateModified:    0,
@@ -1257,7 +1387,6 @@ func TestPlaybookChecklistCleanup(t *testing.T) {
 					Items: []client.ChecklistItem{
 						{
 							Title:            "title1",
-							AssigneeID:       "id1",
 							AssigneeModified: 101,
 							State:            "Closed",
 							StateModified:    102,
@@ -1275,7 +1404,6 @@ func TestPlaybookChecklistCleanup(t *testing.T) {
 				Items: []client.ChecklistItem{
 					{
 						Title:            "title1",
-						AssigneeID:       "",
 						AssigneeModified: 0,
 						State:            "",
 						StateModified:    0,
@@ -1285,5 +1413,32 @@ func TestPlaybookChecklistCleanup(t *testing.T) {
 			},
 		}
 		require.Equal(t, pb.Checklists, actual)
+	})
+}
+
+func TestPlaybooksGuests(t *testing.T) {
+	e := Setup(t)
+	e.SetE20Licence()
+	e.CreateBasic()
+	e.CreateGuest()
+
+	t.Run("guests can't create playbooks", func(t *testing.T) {
+		_, err := e.PlaybooksClientGuest.Playbooks.Create(context.Background(), client.PlaybookCreateOptions{
+			Title:  "test4",
+			TeamID: e.BasicTeam.Id,
+			Public: false,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("get playbook guest", func(t *testing.T) {
+		_, err := e.PlaybooksClientGuest.Playbooks.Get(context.Background(), e.BasicPlaybook.ID)
+		require.Error(t, err)
+	})
+
+	t.Run("update playbook properties", func(t *testing.T) {
+		e.BasicPlaybook.Description = "This is the updated description"
+		err := e.PlaybooksClientGuest.Playbooks.Update(context.Background(), *e.BasicPlaybook)
+		require.Error(t, err)
 	})
 }

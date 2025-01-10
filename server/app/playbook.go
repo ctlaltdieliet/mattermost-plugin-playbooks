@@ -1,15 +1,14 @@
 package app
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"gopkg.in/guregu/null.v4"
-
 	"github.com/pkg/errors"
+	"gopkg.in/guregu/null.v4"
 )
 
 // Playbook represents a desired business outcome, from which playbook runs are started to solve
@@ -18,52 +17,62 @@ import (
 // the JSON name of the item in the export format. If the field should not be exported the value should be "-".
 // Fields should be exported if they are not server specific like InvitedUserIDs or are tracking metadata like CreateAt.
 type Playbook struct {
-	ID                                   string                 `json:"id" export:"-"`
-	Title                                string                 `json:"title" export:"title"`
-	Description                          string                 `json:"description" export:"description"`
-	Public                               bool                   `json:"public" export:"-"`
-	TeamID                               string                 `json:"team_id" export:"-"`
-	CreatePublicPlaybookRun              bool                   `json:"create_public_playbook_run" export:"-"`
-	CreateAt                             int64                  `json:"create_at" export:"-"`
-	UpdateAt                             int64                  `json:"update_at" export:"-"`
-	DeleteAt                             int64                  `json:"delete_at" export:"-"`
-	NumStages                            int64                  `json:"num_stages" export:"-"`
-	NumSteps                             int64                  `json:"num_steps" export:"-"`
-	NumRuns                              int64                  `json:"num_runs" export:"-"`
-	NumActions                           int64                  `json:"num_actions" export:"-"`
-	LastRunAt                            int64                  `json:"last_run_at" export:"-"`
-	Checklists                           []Checklist            `json:"checklists" export:"-"`
-	Members                              []PlaybookMember       `json:"members" export:"-"`
-	ReminderMessageTemplate              string                 `json:"reminder_message_template" export:"reminder_message_template"`
-	ReminderTimerDefaultSeconds          int64                  `json:"reminder_timer_default_seconds" export:"reminder_timer_default_seconds"`
-	StatusUpdateEnabled                  bool                   `json:"status_update_enabled" export:"status_update_enabled"`
-	InvitedUserIDs                       []string               `json:"invited_user_ids" export:"-"`
-	InvitedGroupIDs                      []string               `json:"invited_group_ids" export:"-"`
-	InviteUsersEnabled                   bool                   `json:"invite_users_enabled" export:"-"`
-	DefaultOwnerID                       string                 `json:"default_owner_id" export:"-"`
-	DefaultOwnerEnabled                  bool                   `json:"default_owner_enabled" export:"-"`
-	BroadcastChannelIDs                  []string               `json:"broadcast_channel_ids" export:"-"`
-	WebhookOnCreationURLs                []string               `json:"webhook_on_creation_urls" export:"-"`
-	WebhookOnCreationEnabled             bool                   `json:"webhook_on_creation_enabled" export:"-"`
-	MessageOnJoin                        string                 `json:"message_on_join" export:"message_on_join"`
-	MessageOnJoinEnabled                 bool                   `json:"message_on_join_enabled" export:"message_on_join_enabled"`
-	RetrospectiveReminderIntervalSeconds int64                  `json:"retrospective_reminder_interval_seconds" export:"retrospective_reminder_interval_seconds"`
-	RetrospectiveTemplate                string                 `json:"retrospective_template" export:"retrospective_template"`
-	RetrospectiveEnabled                 bool                   `json:"retrospective_enabled" export:"retrospective_enabled"`
-	WebhookOnStatusUpdateURLs            []string               `json:"webhook_on_status_update_urls" export:"-"`
-	SignalAnyKeywords                    []string               `json:"signal_any_keywords" export:"signal_any_keywords"`
-	SignalAnyKeywordsEnabled             bool                   `json:"signal_any_keywords_enabled" export:"signal_any_keywords_enabled"`
-	CategorizeChannelEnabled             bool                   `json:"categorize_channel_enabled" export:"categorize_channel_enabled"`
-	CategoryName                         string                 `json:"category_name" export:"category_name"`
-	RunSummaryTemplateEnabled            bool                   `json:"run_summary_template_enabled" export:"run_summary_template_enabled"`
-	RunSummaryTemplate                   string                 `json:"run_summary_template" export:"run_summary_template"`
-	ChannelNameTemplate                  string                 `json:"channel_name_template" export:"channel_name_template"`
-	DefaultPlaybookAdminRole             string                 `json:"default_playbook_admin_role" export:"-"`
-	DefaultPlaybookMemberRole            string                 `json:"default_playbook_member_role" export:"-"`
-	DefaultRunAdminRole                  string                 `json:"default_run_admin_role" export:"-"`
-	DefaultRunMemberRole                 string                 `json:"default_run_member_role" export:"-"`
-	Metrics                              []PlaybookMetricConfig `json:"metrics" export:"metrics"`
-	ActiveRuns                           int64                  `json:"active_runs" export:"-"`
+	ID                                      string                 `json:"id" export:"-"`
+	Title                                   string                 `json:"title" export:"title"`
+	Description                             string                 `json:"description" export:"description"`
+	Public                                  bool                   `json:"public" export:"-"`
+	TeamID                                  string                 `json:"team_id" export:"-"`
+	CreatePublicPlaybookRun                 bool                   `json:"create_public_playbook_run" export:"-"`
+	CreateAt                                int64                  `json:"create_at" export:"-"`
+	UpdateAt                                int64                  `json:"update_at" export:"-"`
+	DeleteAt                                int64                  `json:"delete_at" export:"-"`
+	NumStages                               int64                  `json:"num_stages" export:"-"`
+	NumSteps                                int64                  `json:"num_steps" export:"-"`
+	NumRuns                                 int64                  `json:"num_runs" export:"-"`
+	NumActions                              int64                  `json:"num_actions" export:"-"`
+	LastRunAt                               int64                  `json:"last_run_at" export:"-"`
+	Checklists                              []Checklist            `json:"checklists" export:"-"`
+	Members                                 []PlaybookMember       `json:"members" export:"-"`
+	ReminderMessageTemplate                 string                 `json:"reminder_message_template" export:"reminder_message_template"`
+	ReminderTimerDefaultSeconds             int64                  `json:"reminder_timer_default_seconds" export:"reminder_timer_default_seconds"`
+	StatusUpdateEnabled                     bool                   `json:"status_update_enabled" export:"status_update_enabled"`
+	InvitedUserIDs                          []string               `json:"invited_user_ids" export:"-"`
+	InvitedGroupIDs                         []string               `json:"invited_group_ids" export:"-"`
+	InviteUsersEnabled                      bool                   `json:"invite_users_enabled" export:"-"`
+	DefaultOwnerID                          string                 `json:"default_owner_id" export:"-"`
+	DefaultOwnerEnabled                     bool                   `json:"default_owner_enabled" export:"-"`
+	BroadcastChannelIDs                     []string               `json:"broadcast_channel_ids" export:"-"`
+	WebhookOnCreationURLs                   []string               `json:"webhook_on_creation_urls" export:"-"`
+	WebhookOnCreationEnabled                bool                   `json:"webhook_on_creation_enabled" export:"-"`
+	MessageOnJoin                           string                 `json:"message_on_join" export:"message_on_join"`
+	MessageOnJoinEnabled                    bool                   `json:"message_on_join_enabled" export:"message_on_join_enabled"`
+	RetrospectiveReminderIntervalSeconds    int64                  `json:"retrospective_reminder_interval_seconds" export:"retrospective_reminder_interval_seconds"`
+	RetrospectiveTemplate                   string                 `json:"retrospective_template" export:"retrospective_template"`
+	RetrospectiveEnabled                    bool                   `json:"retrospective_enabled" export:"retrospective_enabled"`
+	WebhookOnStatusUpdateURLs               []string               `json:"webhook_on_status_update_urls" export:"-"`
+	SignalAnyKeywords                       []string               `json:"signal_any_keywords" export:"signal_any_keywords"`
+	SignalAnyKeywordsEnabled                bool                   `json:"signal_any_keywords_enabled" export:"signal_any_keywords_enabled"`
+	CategorizeChannelEnabled                bool                   `json:"categorize_channel_enabled" export:"categorize_channel_enabled"`
+	CategoryName                            string                 `json:"category_name" export:"category_name"`
+	RunSummaryTemplateEnabled               bool                   `json:"run_summary_template_enabled" export:"run_summary_template_enabled"`
+	RunSummaryTemplate                      string                 `json:"run_summary_template" export:"run_summary_template"`
+	ChannelNameTemplate                     string                 `json:"channel_name_template" export:"channel_name_template"`
+	DefaultPlaybookAdminRole                string                 `json:"default_playbook_admin_role" export:"-"`
+	DefaultPlaybookMemberRole               string                 `json:"default_playbook_member_role" export:"-"`
+	DefaultRunAdminRole                     string                 `json:"default_run_admin_role" export:"-"`
+	DefaultRunMemberRole                    string                 `json:"default_run_member_role" export:"-"`
+	Metrics                                 []PlaybookMetricConfig `json:"metrics" export:"metrics"`
+	ActiveRuns                              int64                  `json:"active_runs" export:"-"`
+	CreateChannelMemberOnNewParticipant     bool                   `json:"create_channel_member_on_new_participant" export:"create_channel_member_on_new_participant"`
+	RemoveChannelMemberOnRemovedParticipant bool                   `json:"remove_channel_member_on_removed_participant" export:"create_channel_member_on_removed_participant"`
+
+	// ChannelID is the identifier of the channel that would be -potentially- linked
+	// to any new run of this playbook
+	ChannelID string `json:"channel_id" export:"channel_id"`
+
+	// ChannelMode is the playbook>run>channel flow used
+	ChannelMode ChannelPlaybookMode `json:"channel_mode" export:"channel_mode"`
+
 	// Deprecated: preserved for backwards compatibility with v1.27
 	BroadcastEnabled             bool `json:"broadcast_enabled" export:"-"`
 	WebhookOnStatusUpdateEnabled bool `json:"webhook_on_status_update_enabled" export:"-"`
@@ -183,6 +192,18 @@ func (p Playbook) MarshalJSON() ([]byte, error) {
 	return json.Marshal(old)
 }
 
+func (p Playbook) GetRunChannelID() string {
+	if p.ChannelMode == PlaybookRunLinkExistingChannel {
+		return p.ChannelID
+	}
+	return ""
+}
+
+// ChecklistCommon allows access on common fields of Checklist and api.UpdateChecklist
+type ChecklistCommon interface {
+	GetItems() []ChecklistItemCommon
+}
+
 // Checklist represents a checklist in a playbook.
 type Checklist struct {
 	// ID is the identifier of the checklist.
@@ -195,10 +216,28 @@ type Checklist struct {
 	Items []ChecklistItem `json:"items" export:"-"`
 }
 
+func (c Checklist) GetItems() []ChecklistItemCommon {
+	items := make([]ChecklistItemCommon, len(c.Items))
+	for i := range c.Items {
+		items[i] = &c.Items[i]
+	}
+	return items
+}
+
 func (c Checklist) Clone() Checklist {
 	newChecklist := c
 	newChecklist.Items = append([]ChecklistItem(nil), c.Items...)
 	return newChecklist
+}
+
+// ChecklistItemCommon allows access on common fields of ChecklistItem and api.UpdateChecklistItem
+type ChecklistItemCommon interface {
+	GetAssigneeID() string
+
+	SetAssigneeModified(modified int64)
+	SetState(state string)
+	SetStateModified(modified int64)
+	SetCommandLastRun(lastRun int64)
 }
 
 // ChecklistItem represents an item in a checklist.
@@ -242,6 +281,29 @@ type ChecklistItem struct {
 	// of the checklist item. 0 if not set.
 	// Playbook can have only relative timstamp, run can have only absolute timestamp.
 	DueDate int64 `json:"due_date" export:"due_date"`
+
+	// TaskActions is an array of all the task actions associated with this task.
+	TaskActions []TaskAction `json:"task_actions" export:"-"`
+}
+
+func (ci *ChecklistItem) GetAssigneeID() string {
+	return ci.AssigneeID
+}
+
+func (ci *ChecklistItem) SetAssigneeModified(modified int64) {
+	ci.AssigneeModified = modified
+}
+
+func (ci *ChecklistItem) SetState(state string) {
+	ci.State = state
+}
+
+func (ci *ChecklistItem) SetStateModified(modified int64) {
+	ci.StateModified = modified
+}
+
+func (ci *ChecklistItem) SetCommandLastRun(lastRun int64) {
+	ci.CommandLastRun = lastRun
 }
 
 type GetPlaybooksResults struct {
@@ -284,6 +346,9 @@ type PlaybookService interface {
 	// GetPlaybooks retrieves all playbooks
 	GetPlaybooks() ([]Playbook, error)
 
+	// GetActivePlaybooks retrieves all active playbooks
+	GetActivePlaybooks() ([]Playbook, error)
+
 	// GetPlaybooksForTeam retrieves all playbooks on the specified team given the provided options
 	GetPlaybooksForTeam(requesterInfo RequesterInfo, teamID string, opts PlaybookFilterOptions) (GetPlaybooksResults, error)
 
@@ -309,10 +374,10 @@ type PlaybookService interface {
 	Duplicate(playbook Playbook, userID string) (string, error)
 
 	// Get top playbooks for teams
-	GetTopPlaybooksForTeam(teamID, userID string, opts *model.InsightsOpts) (*PlaybooksInsightsList, error)
+	GetTopPlaybooksForTeam(teamID, userID string, opts *InsightsOpts) (*PlaybooksInsightsList, error)
 
 	// Get top playbooks for users
-	GetTopPlaybooksForUser(teamID, userID string, opts *model.InsightsOpts) (*PlaybooksInsightsList, error)
+	GetTopPlaybooksForUser(teamID, userID string, opts *InsightsOpts) (*PlaybooksInsightsList, error)
 }
 
 // PlaybookStore is an interface for storing playbooks
@@ -326,6 +391,9 @@ type PlaybookStore interface {
 	// GetPlaybooks retrieves all playbooks
 	GetPlaybooks() ([]Playbook, error)
 
+	// GetActivePlaybooks retrieves all active playbooks
+	GetActivePlaybooks() ([]Playbook, error)
+
 	// GetPlaybooksForTeam retrieves all playbooks on the specified team
 	GetPlaybooksForTeam(requesterInfo RequesterInfo, teamID string, opts PlaybookFilterOptions) (GetPlaybooksResults, error)
 
@@ -333,7 +401,7 @@ type PlaybookStore interface {
 	GetPlaybooksWithKeywords(opts PlaybookFilterOptions) ([]Playbook, error)
 
 	// GetTimeLastUpdated retrieves time last playbook was updated at.
-	// Passed argument determins whether to include playbooks with
+	// Passed argument determines whether to include playbooks with
 	// SignalAnyKeywordsEnabled flag or not.
 	GetTimeLastUpdated(onlyPlaybooksWithKeywordsEnabled bool) (int64, error)
 
@@ -377,10 +445,10 @@ type PlaybookStore interface {
 	DeleteMetric(id string) error
 
 	// Get top playbooks for teams
-	GetTopPlaybooksForTeam(teamID, userID string, opts *model.InsightsOpts) (*PlaybooksInsightsList, error)
+	GetTopPlaybooksForTeam(teamID, userID string, opts *InsightsOpts) (*PlaybooksInsightsList, error)
 
 	// Get top playbooks for users
-	GetTopPlaybooksForUser(teamID, userID string, opts *model.InsightsOpts) (*PlaybooksInsightsList, error)
+	GetTopPlaybooksForUser(teamID, userID string, opts *InsightsOpts) (*PlaybooksInsightsList, error)
 
 	// AddPlaybookMember adds a user as a member to a playbook
 	AddPlaybookMember(id string, memberID string) error
@@ -445,6 +513,7 @@ type PlaybookFilterOptions struct {
 	SearchTerm         string
 	WithArchived       bool
 	WithMembershipOnly bool //if true will return only playbooks you are a member of
+	PlaybookIDs        []string
 
 	// Pagination options.
 	Page    int
@@ -495,13 +564,13 @@ func ValidateWebhookURLs(urls []string) error {
 	}
 
 	for _, webhook := range urls {
-		url, err := url.ParseRequestURI(webhook)
+		reqURL, err := url.ParseRequestURI(webhook)
 		if err != nil {
 			return errors.Wrapf(err, "unable to parse webhook: %v", webhook)
 		}
 
-		if url.Scheme != "http" && url.Scheme != "https" {
-			return fmt.Errorf("protocol in webhook URL is %s; only HTTP and HTTPS are accepted", url.Scheme)
+		if reqURL.Scheme != "http" && reqURL.Scheme != "https" {
+			return fmt.Errorf("protocol in webhook URL is %s; only HTTP and HTTPS are accepted", reqURL.Scheme)
 		}
 	}
 
@@ -511,10 +580,65 @@ func ValidateWebhookURLs(urls []string) error {
 func ValidateCategoryName(categoryName string) error {
 	categoryNameLength := len(categoryName)
 	if categoryNameLength > 22 {
-		msg := fmt.Sprintf("invalid category name: %s (maximum length is 22 characters)", categoryName)
-		return errors.Errorf(msg)
+		return errors.Errorf("invalid category name: %s (maximum length is 22 characters)", categoryName)
 	}
 	return nil
+}
+
+// CleanUpChecklists sets empty values for checklist fields that are not editable
+func CleanUpChecklists[T ChecklistCommon](checklists []T) {
+	for listIndex := range checklists {
+		items := checklists[listIndex].GetItems()
+		for itemIndex := range items {
+			items[itemIndex].SetAssigneeModified(0)
+			items[itemIndex].SetState("")
+			items[itemIndex].SetStateModified(0)
+			items[itemIndex].SetCommandLastRun(0)
+		}
+	}
+}
+
+// ValidatePreAssignment checks if invitations are enabled and if all assignees are also invited
+func ValidatePreAssignment(assignees []string, invitedUsers []string, inviteUsersEnabled bool) error {
+	if len(assignees) > 0 && !inviteUsersEnabled {
+		return errors.New("invitations are disabled")
+	}
+	if !assigneesAreInvited(assignees, invitedUsers) {
+		return errors.New("users missing in invite user list")
+	}
+	return nil
+}
+
+// GetDistinctAssignees returns a list of distinct user ids that are assignees in the given checklists
+func GetDistinctAssignees[T ChecklistCommon](checklists []T) []string {
+	uMap := make(map[string]bool)
+	for _, cl := range checklists {
+		for _, ci := range cl.GetItems() {
+			if id := ci.GetAssigneeID(); id != "" && !uMap[id] {
+				uMap[id] = true
+			}
+		}
+	}
+	uIDs := make([]string, 0, len(uMap))
+	for k := range uMap {
+		uIDs = append(uIDs, k)
+	}
+	return uIDs
+}
+
+func assigneesAreInvited(assignees []string, invited []string) bool {
+	for _, assignee := range assignees {
+		found := false
+		for _, user := range invited {
+			if user == assignee {
+				found = true
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func removeDuplicates(a []string) []string {
@@ -561,4 +685,57 @@ type PlaybookInsight struct {
 	// Time the playbook was last run.
 	// required: false
 	LastRunAt int64 `json:"last_run_at"`
+}
+
+// ChannelPlaybookMode is a type alias to hold all possible
+// modes for playbook > run > channel relation
+type ChannelPlaybookMode int
+
+const (
+	PlaybookRunCreateNewChannel ChannelPlaybookMode = iota
+	PlaybookRunLinkExistingChannel
+)
+
+var channelPlaybookTypes = [...]string{
+	PlaybookRunCreateNewChannel:    "create_new_channel",
+	PlaybookRunLinkExistingChannel: "link_existing_channel",
+}
+
+// String creates the string version of the TelemetryTrack
+func (cpm ChannelPlaybookMode) String() string {
+	return channelPlaybookTypes[cpm]
+}
+
+// MarshalText converts a ChannelPlaybookMode to a string for serializers (including JSON)
+func (cpm ChannelPlaybookMode) MarshalText() ([]byte, error) {
+	return []byte(channelPlaybookTypes[cpm]), nil
+}
+
+// UnmarshalText parses a ChannelPlaybookMode from text. For deserializers (including JSON)
+func (cpm *ChannelPlaybookMode) UnmarshalText(text []byte) error {
+	for i, st := range channelPlaybookTypes {
+		if st == string(text) {
+			*cpm = ChannelPlaybookMode(i)
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown ChannelPlaybookMode: %s", string(text))
+}
+
+// Scan parses a ChannelPlaybookMode back from the DB
+func (cpm *ChannelPlaybookMode) Scan(src interface{}) error {
+	txt, ok := src.([]byte) // mysql
+	if !ok {
+		txt, ok := src.(string) //postgres
+		if !ok {
+			return fmt.Errorf("could not cast to string: %v", src)
+		}
+		return cpm.UnmarshalText([]byte(txt))
+	}
+	return cpm.UnmarshalText(txt)
+}
+
+// Value represents a ChannelPlaybookMode as a type writable into the DB
+func (cpm ChannelPlaybookMode) Value() (driver.Value, error) {
+	return cpm.MarshalText()
 }

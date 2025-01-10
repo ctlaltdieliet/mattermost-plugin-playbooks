@@ -1,4 +1,9 @@
-import React, {useRef, useState, useEffect, useCallback} from 'react';
+import React, {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
 import styled from 'styled-components';
 
 type Props = {
@@ -85,6 +90,7 @@ const MenuWrapper = (props: Props) => {
     return (
         <MenuWrapperComponent
             role='button'
+            // eslint-disable-next-line formatjs/no-literal-string-in-jsx
             aria-label={props.label || 'menuwrapper'}
             className={className}
             onClick={toggle}

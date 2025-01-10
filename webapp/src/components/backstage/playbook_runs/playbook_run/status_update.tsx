@@ -1,7 +1,7 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState} from 'react';
+import React, {ReactNode, useState} from 'react';
 import {useDispatch} from 'react-redux';
 import styled from 'styled-components';
 import {FormattedMessage, useIntl} from 'react-intl';
@@ -15,10 +15,10 @@ import {AnchorLinkTitle} from 'src/components/backstage/playbook_runs/shared';
 import {Timestamp} from 'src/webapp_globals';
 import {openUpdateRunStatusModal} from 'src/actions';
 import {PlaybookRun, PlaybookRunStatus, StatusPostComplete} from 'src/types/playbook_run';
-import {useNow, useAllowRequestUpdate} from 'src/hooks';
+import {useAllowRequestUpdate, useNow} from 'src/hooks';
 import Clock from 'src/components/assets/icons/clock';
 import {TertiaryButton, UpgradeTertiaryButton} from 'src/components/assets/buttons';
-import {PAST_TIME_SPEC, FUTURE_TIME_SPEC} from 'src/components/time_spec';
+import {FUTURE_TIME_SPEC, PAST_TIME_SPEC} from 'src/components/time_spec';
 import {requestUpdate, telemetryEventForPlaybookRun} from 'src/client';
 import ConfirmModal from 'src/components/widgets/confirmation_modal';
 import DotMenu, {DropdownMenuItemStyled} from 'src/components/dot_menu';
@@ -26,7 +26,9 @@ import {HamburgerButton} from 'src/components/assets/icons/three_dots_icon';
 import Tooltip from 'src/components/widgets/tooltip';
 import {PlaybookRunEventTarget} from 'src/types/telemetry';
 
-import {ToastType, useToaster} from '../../toast_banner';
+import {useToaster} from 'src/components/backstage/toast_banner';
+
+import {ToastStyle} from 'src/components/backstage/toast';
 
 import StatusUpdateCard from './update_card';
 import {RHSContent} from './rhs';
@@ -87,9 +89,15 @@ const useRequestUpdate = (playbookRunId: string) => {
     const requestStatusUpdate = async () => {
         const response = await requestUpdate(playbookRunId);
         if (response?.error) {
-            addToast(formatMessage({defaultMessage: 'The update request was unsuccessful.'}), ToastType.Failure);
+            addToast({
+                content: formatMessage({defaultMessage: 'The update request was unsuccessful.'}),
+                toastStyle: ToastStyle.Failure,
+            });
         } else {
-            addToast(formatMessage({defaultMessage: 'Your request was sent to the run channel. '}), ToastType.Success);
+            addToast({
+                content: formatMessage({defaultMessage: 'Your request was sent to the run channel. '}),
+                toastStyle: ToastStyle.Success,
+            });
         }
     };
     const RequestUpdateConfirmModal = (
@@ -119,7 +127,11 @@ export const ViewerStatusUpdate = ({id, playbookRun, openRHS, lastStatusUpdate}:
     const fiveSeconds = 5000;
     const now = useNow(fiveSeconds);
     const {RequestUpdateConfirmModal, showRequestUpdateConfirm} = useRequestUpdate(playbookRun.id);
-    const {UpgradeLicenseModal, RequestUpdateButton} = useRequestUpdateUpgrade();
+    const {RequestUpdateButton, UpgradeLicenseModal} = useRequestUpdateButton({
+        onClick: showRequestUpdateConfirm,
+        type: 'button',
+        disabled: false,
+    });
 
     if (!playbookRun.status_update_enabled) {
         return null;
@@ -167,13 +179,7 @@ export const ViewerStatusUpdate = ({id, playbookRun, openRHS, lastStatusUpdate}:
                     >
                         {dueInfo.time}
                     </DueDateViewer>
-                    {playbookRun.current_status === PlaybookRunStatus.InProgress ? (
-                        <RequestUpdateButton
-                            onClick={showRequestUpdateConfirm}
-                            type={'button'}
-                            disabled={false}
-                        />
-                    ) : null}
+                    {playbookRun.current_status === PlaybookRunStatus.InProgress ? RequestUpdateButton : null}
                 </RightWrapper>
             </Header>
             <Content isShort={false}>
@@ -198,7 +204,11 @@ export const ParticipantStatusUpdate = ({id, playbookRun, openRHS}: ParticipantP
     const {formatMessage} = useIntl();
     const dispatch = useDispatch();
     const {RequestUpdateConfirmModal, showRequestUpdateConfirm} = useRequestUpdate(playbookRun.id);
-    const {UpgradeLicenseModal, RequestUpdateButton} = useRequestUpdateUpgrade();
+    const {RequestUpdateButton, UpgradeLicenseModal} = useRequestUpdateButton({
+        onClick: playbookRun.current_status === PlaybookRunStatus.Finished ? undefined : showRequestUpdateConfirm,
+        disabled: playbookRun.current_status === PlaybookRunStatus.Finished,
+        type: 'dotmenu',
+    });
     const fiveSeconds = 5000;
     const now = useNow(fiveSeconds);
 
@@ -258,11 +268,7 @@ export const ParticipantStatusUpdate = ({id, playbookRun, openRHS}: ParticipantP
                             >
                                 {openRHSText}
                             </DropdownItem>
-                            <RequestUpdateButton
-                                onClick={playbookRun.current_status === PlaybookRunStatus.Finished ? undefined : showRequestUpdateConfirm}
-                                disabled={playbookRun.current_status === PlaybookRunStatus.Finished}
-                                type={'dotmenu'}
-                            />
+                            {RequestUpdateButton}
                         </DotMenu>
                     </Kebab>
                 </RightWrapper>
@@ -372,7 +378,7 @@ const PostUpdateButton = styled(TertiaryButton)`
     padding: 0 48px;
 `;
 
-const useRequestUpdateUpgrade = () => {
+const useRequestUpdateButton = ({type, onClick, disabled = false}: {disabled: boolean, type: 'dotmenu' | 'button', onClick?: () => void}) => {
     const {formatMessage} = useIntl();
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const requestUpdateAllowed = useAllowRequestUpdate();
@@ -389,6 +395,24 @@ const useRequestUpdateUpgrade = () => {
         children: formatMessage({defaultMessage: 'Request update...'}),
     };
 
+    if (requestUpdateAllowed) {
+        const RequestUpdateButton = type === 'dotmenu' ? (
+            <DropdownItem
+                disabled={disabled}
+                onClick={onClick}
+            >
+                {formatMessage({defaultMessage: 'Request update...'})}
+            </DropdownItem>
+        ) : (
+            <TertiaryButton
+                css={commonCss}
+                onClick={onClick}
+                {...commonProps}
+            />
+        );
+        return {RequestUpdateButton};
+    }
+
     const UpgradeLicenseModal = (
         <UpgradeModal
             messageType={AdminNotificationType.REQUEST_UPDATE}
@@ -397,61 +421,40 @@ const useRequestUpdateUpgrade = () => {
         />
     );
 
-    if (requestUpdateAllowed) {
-        const RequestUpdateButton = ({type, onClick, disabled = false}: {disabled: boolean, type: 'dotmenu' | 'button', onClick?: () => void}) => {
-            return type === 'dotmenu' ? (
-                <DropdownItem
+    const RequestUpdateButton = (
+        <Tooltip
+            id={'request-update-button-tooltip'}
+            placement={'bottom'}
+            content={formatMessage<ReactNode>(
+                {defaultMessage: '<title>Professional feature</title>\n<body>This is a paid feature, available with a free 30-day trial</body>'},
+                {
+                    title: (el) => <div>{el}</div>,
+                    body: (el) => <span style={{opacity: 0.56}}>{el}</span>,
+                }
+            )}
+        >
+            {type === 'dotmenu' ? (
+                <DotMenuItem
                     disabled={disabled}
-                    onClick={onClick}
+                    onClick={() => setShowUpgradeModal(true)}
                 >
                     {formatMessage({defaultMessage: 'Request update...'})}
-                </DropdownItem>
+                    <KeyVariantCircleIcon
+                        color={'var(--online-indicator)'}
+                        size={20}
+                    />
+                </DotMenuItem>
             ) : (
-                <TertiaryButton
+                <UpgradeTertiaryButton
                     css={commonCss}
-                    onClick={onClick}
+                    onClick={() => setShowUpgradeModal(true)}
                     {...commonProps}
                 />
-            );
-        };
-        return {UpgradeLicenseModal, RequestUpdateButton};
-    }
+            )}
+        </Tooltip>
+    );
 
-    const RequestUpdateButton = ({type, onClick, disabled = false}: {disabled: boolean, type: 'dotmenu' | 'button', onClick?: () => void}) => {
-        return (<>
-            <Tooltip
-                id={'request-update-button-tooltip'}
-                placement={'bottom'}
-                content={formatMessage(
-                    {defaultMessage: '<title>Professional feature</title>\n<body>This is a paid feature, available with a free 30-day trial</body>'},
-                    {
-                        title: (el) => <div>{el}</div>,
-                        body: (el) => <span style={{opacity: 0.56}}>{el}</span>,
-                    }
-                )}
-            >
-                {type === 'dotmenu' ? (
-                    <DotMenuItem
-                        disabled={disabled}
-                        onClick={() => setShowUpgradeModal(true)}
-                    >
-                        {formatMessage({defaultMessage: 'Request update...'})}
-                        <KeyVariantCircleIcon
-                            color={'var(--online-indicator)'}
-                            size={20}
-                        />
-                    </DotMenuItem>
-                ) : (
-                    <UpgradeTertiaryButton
-                        css={commonCss}
-                        onClick={() => setShowUpgradeModal(true)}
-                        {...commonProps}
-                    />
-                )}
-            </Tooltip>
-        </>);
-    };
-    return {UpgradeLicenseModal, RequestUpdateButton};
+    return {RequestUpdateButton, UpgradeLicenseModal};
 };
 
 const ViewAllUpdates = styled.div`

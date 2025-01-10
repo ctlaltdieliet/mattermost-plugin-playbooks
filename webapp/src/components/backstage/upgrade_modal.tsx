@@ -4,14 +4,14 @@ import {useSelector} from 'react-redux';
 import styled from 'styled-components';
 
 import GenericModal, {DefaultFooterContainer} from 'src/components/widgets/generic_modal';
-import {requestTrialLicense, postMessageToAdmins} from 'src/client';
+import {postMessageToAdmins} from 'src/client';
 import UpgradeModalFooter from 'src/components/backstage/upgrade_modal_footer';
 
-import {isCurrentUserAdmin, getAdminAnalytics, isTeamEdition} from 'src/selectors';
+import {isCurrentUserAdmin, isTeamEdition} from 'src/selectors';
 
 import {AdminNotificationType} from 'src/constants';
 import {isCloud} from 'src/license';
-import {useOpenCloudModal} from 'src/hooks';
+import {useOpenContactSales, useOpenStartTrialFormModal} from 'src/hooks';
 
 import {ModalActionState, getUpgradeModalButtons, getUpgradeModalCopy} from 'src/components/backstage/upgrade_modal_data';
 
@@ -25,29 +25,20 @@ interface Props {
 }
 
 const UpgradeModal = (props: Props) => {
-    const openCloudModal = useOpenCloudModal();
+    const openContactSales = useOpenContactSales();
     const isServerCloud = useSelector(isCloud);
     const isAdmin = useSelector(isCurrentUserAdmin);
     const isServerTeamEdition = useSelector(isTeamEdition);
+    const openTrialFormModal = useOpenStartTrialFormModal();
 
     const [actionState, setActionState] = useState(ModalActionState.Uninitialized);
-
-    const analytics = useSelector(getAdminAnalytics);
-    const serverTotalUsers = analytics?.TOTAL_USERS || 0;
 
     const requestLicenseSelfHosted = async () => {
         if (actionState === ModalActionState.Loading) {
             return;
         }
         setActionState(ModalActionState.Loading);
-
-        const requestedUsers = Math.max(serverTotalUsers, 30);
-        const response = await requestTrialLicense(requestedUsers, props.messageType);
-        if (response.error) {
-            setActionState(ModalActionState.Error);
-        } else {
-            setActionState(ModalActionState.Success);
-        }
+        openTrialFormModal('playbooks_upgrade_modal');
     };
 
     const openUpgradeModal = async () => {
@@ -57,7 +48,7 @@ const UpgradeModal = (props: Props) => {
 
         props.onHide();
 
-        openCloudModal();
+        openContactSales();
     };
 
     let adminMainAction = requestLicenseSelfHosted;

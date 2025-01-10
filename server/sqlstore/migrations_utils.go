@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 // 'IF NOT EXISTS' syntax is not supported in Postgres 9.4, so we need
@@ -314,6 +314,39 @@ func getDBIndexesInfo(store *SQLStore) ([]IndexInfo, error) {
 			AND TABLENAME LIKE 'ir_%'
 			AND TABLENAME != 'ir_db_migrations'
 			ORDER BY TABLENAME ASC, INDEXNAME ASC;
+		`)
+	}
+
+	return results, err
+}
+
+type ConstraintsInfo struct {
+	ConstraintName string
+	TableName      string
+	ConstraintType string
+}
+
+// getDBIndexesInfo returns index info for each table created by Playbook plugin
+func getDBConstraintsInfo(store *SQLStore) ([]ConstraintsInfo, error) {
+	var results []ConstraintsInfo
+	var err error
+
+	if store.db.DriverName() == model.DatabaseDriverMysql {
+		err = store.db.Select(&results, `
+			SELECT CONSTRAINT_NAME as ConstraintName, TABLE_NAME as TableName, CONSTRAINT_TYPE as ConstraintType
+			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+			WHERE TABLE_NAME LIKE 'ir_%'
+			AND TABLE_NAME != 'ir_db_migrations'
+			AND TABLE_SCHEMA = (SELECT DATABASE())
+			ORDER BY CONSTRAINT_NAME ASC, TABLE_NAME ASC;
+		`)
+	} else if store.db.DriverName() == model.DatabaseDriverPostgres {
+		err = store.db.Select(&results, `
+			SELECT conname as ConstraintName, contype as ConstraintType
+			FROM pg_constraint
+			WHERE conname LIKE 'ir_%'
+			AND conname NOT LIKE 'ir_db_migrations%'
+			ORDER BY conname ASC, contype ASC;
 		`)
 	}
 

@@ -10,10 +10,12 @@ import (
 	"github.com/blang/semver"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 )
 
 type Migration struct {
@@ -1406,7 +1408,7 @@ var migrations = []Migration{
 				// Just in case (so we don't crash out during the migration) remove any old reminders
 				sqlStore.scheduler.Cancel(ID)
 
-				if _, err := sqlStore.scheduler.ScheduleOnce(ID, time.Now().Add(oneWeek)); err != nil {
+				if _, err := sqlStore.scheduler.ScheduleOnce(ID, time.Now().Add(oneWeek), nil); err != nil {
 					return errors.Wrapf(err, "failed to set new schedule for run id: %s", ID)
 				}
 
@@ -1650,7 +1652,7 @@ var migrations = []Migration{
 				// Just in case (so we don't crash out during the migration) remove any old reminders
 				sqlStore.scheduler.Cancel(ID)
 
-				if _, err := sqlStore.scheduler.ScheduleOnce(ID, time.Now().Add(oneWeek)); err != nil {
+				if _, err := sqlStore.scheduler.ScheduleOnce(ID, time.Now().Add(oneWeek), nil); err != nil {
 					return errors.Wrapf(err, "failed to set new schedule for run id: %s", ID)
 				}
 
@@ -2356,6 +2358,118 @@ var migrations = []Migration{
 				return errors.New(strings.Join(errCollected, ",\n "))
 			}
 
+			return nil
+		},
+	},
+	{
+		fromVersion: semver.MustParse("0.59.0"),
+		toVersion:   semver.MustParse("0.60.0"),
+		migrationFunc: func(e sqlx.Ext, sqlStore *SQLStore) error {
+			if e.DriverName() == model.DatabaseDriverMysql {
+				if err := addColumnToMySQLTable(e, "IR_Playbook", "CreateChannelMemberOnNewParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column CreateChannelMemberOnNewParticipant to table IR_Playbook")
+				}
+				if err := addColumnToMySQLTable(e, "IR_Incident", "CreateChannelMemberOnNewParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column CreateChannelMemberOnNewParticipant to table IR_Incident")
+				}
+				if err := addColumnToMySQLTable(e, "IR_Playbook", "RemoveChannelMemberOnRemovedParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column RemoveChannelMemberOnRemovedParticipant to table IR_Playbook")
+				}
+				if err := addColumnToMySQLTable(e, "IR_Incident", "RemoveChannelMemberOnRemovedParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column RemoveChannelMemberOnRemovedParticipant to table IR_Incident")
+				}
+			} else {
+				if err := addColumnToPGTable(e, "IR_Playbook", "CreateChannelMemberOnNewParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column CreateChannelMemberOnNewParticipant to table IR_Playbook")
+				}
+				if err := addColumnToPGTable(e, "IR_Incident", "CreateChannelMemberOnNewParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column CreateChannelMemberOnNewParticipant to table IR_Incident")
+				}
+				if err := addColumnToPGTable(e, "IR_Playbook", "RemoveChannelMemberOnRemovedParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column RemoveChannelMemberOnRemovedParticipant to table IR_Playbook")
+				}
+				if err := addColumnToPGTable(e, "IR_Incident", "RemoveChannelMemberOnRemovedParticipant", "BOOLEAN DEFAULT TRUE"); err != nil {
+					return errors.Wrapf(err, "failed adding column RemoveChannelMemberOnRemovedParticipant to table IR_Incident")
+				}
+			}
+			return nil
+		},
+	},
+	{
+		fromVersion: semver.MustParse("0.60.0"),
+		toVersion:   semver.MustParse("0.61.0"),
+		migrationFunc: func(e sqlx.Ext, sqlStore *SQLStore) error {
+			if e.DriverName() == model.DatabaseDriverMysql {
+				if err := addColumnToMySQLTable(e, "IR_Playbook", "ChannelID", "VARCHAR(26) DEFAULT ''"); err != nil {
+					return errors.Wrapf(err, "failed adding column ChannelID to table IR_Playbook")
+				}
+				if err := addColumnToMySQLTable(e, "IR_Playbook", "ChannelMode", "VARCHAR(32) DEFAULT 'create_new_channel'"); err != nil {
+					return errors.Wrapf(err, "failed adding column ChannelMode to table IR_Incident")
+				}
+				// We drop entirely the unique index for MySQL, there's an additional index on ChannelID that is kept
+				if err := dropIndexIfExists(e, sqlStore, "IR_Incident", "ChannelID"); err != nil {
+					return errors.Wrapf(err, "failed to drop ir_incident_channelid_key index on table ir_incident")
+				}
+				if _, err := e.Exec("UPDATE IR_Incident i JOIN Channels c ON c.id=i.ChannelID AND i.Name='' SET i.name=c.DisplayName"); err != nil {
+					return errors.Wrapf(err, "failed to update all old run names from channel names")
+				}
+			} else {
+				if err := addColumnToPGTable(e, "IR_Playbook", "ChannelID", "VARCHAR(26) DEFAULT ''"); err != nil {
+					return errors.Wrapf(err, "failed adding column ChannelID to table IR_Playbook")
+				}
+				if err := addColumnToPGTable(e, "IR_Playbook", "ChannelMode", "VARCHAR(32) DEFAULT 'create_new_channel'"); err != nil {
+					return errors.Wrapf(err, "failed adding column ChannelMode to table IR_Incident")
+				}
+				// Unique constraint is dropped but index is kept
+				if _, err := e.Exec("ALTER TABLE IR_Incident DROP CONSTRAINT IF EXISTS ir_incident_channelid_key"); err != nil {
+					return errors.Wrapf(err, "failed to drop constraint ir_incident_channelid_key on table ir_incident")
+				}
+				if _, err := e.Exec("UPDATE IR_Incident i SET name=c.DisplayName FROM Channels c WHERE  c.id=i.ChannelID AND i.Name=''"); err != nil {
+					return errors.Wrapf(err, "failed to update all old run names from channel names")
+				}
+			}
+			return nil
+		},
+	},
+	{
+		fromVersion: semver.MustParse("0.61.0"),
+		toVersion:   semver.MustParse("0.62.0"),
+		migrationFunc: func(e sqlx.Ext, sqlStore *SQLStore) error {
+			if e.DriverName() == model.DatabaseDriverMysql {
+				if _, err := e.Exec(`
+						UPDATE IR_UserInfo
+						SET DigestNotificationSettingsJSON =
+						JSON_SET(DigestNotificationSettingsJSON, '$.disable_weekly_digest',
+							JSON_EXTRACT(DigestNotificationSettingsJSON, '$.disable_daily_digest'));
+					`); err != nil {
+					return errors.Wrapf(err, "failed adding disable_weekly_digest field to IR_UserInfo DigestNotificationSettingsJSON")
+				}
+			} else {
+				if _, err := e.Exec(`
+						UPDATE IR_UserInfo
+						SET DigestNotificationSettingsJSON = (DigestNotificationSettingsJSON::jsonb ||
+							jsonb_build_object('disable_weekly_digest', (DigestNotificationSettingsJSON::jsonb->>'disable_daily_digest')::boolean))::json;
+
+					`); err != nil {
+					return errors.Wrapf(err, "failed adding disable_weekly_digest field to IR_UserInfo DigestNotificationSettingsJSON")
+				}
+			}
+			return nil
+		},
+	},
+	{
+		fromVersion: semver.MustParse("0.62.0"),
+		toVersion:   semver.MustParse("0.63.0"),
+		migrationFunc: func(e sqlx.Ext, sqlStore *SQLStore) error {
+			if e.DriverName() == model.DatabaseDriverMysql {
+				if err := addColumnToMySQLTable(e, "IR_Incident", "RunType", "VARCHAR(32) DEFAULT 'playbook'"); err != nil {
+					return errors.Wrapf(err, "failed adding column RunType to table IR_Incident")
+				}
+			} else {
+				if err := addColumnToPGTable(e, "IR_Incident", "RunType", "VARCHAR(32) DEFAULT 'playbook'"); err != nil {
+					return errors.Wrapf(err, "failed adding column RunType to table IR_Incident")
+				}
+			}
 			return nil
 		},
 	},

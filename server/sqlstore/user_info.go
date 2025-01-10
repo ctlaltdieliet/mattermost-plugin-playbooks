@@ -7,11 +7,12 @@ import (
 	"database/sql"
 	"encoding/json"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-
 	sq "github.com/Masterminds/squirrel"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 )
 
 type sqlUserInfo struct {
@@ -107,7 +108,7 @@ func toSQLUserInfo(userInfo app.UserInfo) (*sqlUserInfo, error) {
 	}
 
 	if len(digestNotificationSettingsJSON) > maxJSONLength {
-		return nil, errors.Wrapf(err, "digestNotificationSettings json for user id '%s' is too long (max %d)", userInfo.ID, maxJSONLength)
+		return nil, errors.Errorf("digestNotificationSettings json for user id '%s' is too long (max %d)", userInfo.ID, maxJSONLength)
 	}
 
 	return &sqlUserInfo{

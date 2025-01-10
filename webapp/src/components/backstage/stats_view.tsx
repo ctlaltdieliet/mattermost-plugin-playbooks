@@ -8,11 +8,7 @@ import {FormattedNumber, useIntl} from 'react-intl';
 
 import {DateTime} from 'luxon';
 
-import {
-    DefaultFetchPlaybookRunsParamsTime,
-    fetchParamsTimeEqual,
-    FetchPlaybookRunsParams,
-} from 'src/types/playbook_run';
+import {DefaultFetchPlaybookRunsParamsTime, FetchPlaybookRunsParams, fetchParamsTimeEqual} from 'src/types/playbook_run';
 import ClipboardsPlay from 'src/components/assets/icons/clipboards_play';
 import Profiles from 'src/components/assets/icons/profiles';
 import ClipboardsCheckmark from 'src/components/assets/icons/clipboards_checkmark';
@@ -151,7 +147,7 @@ const StatsView = (props: Props) => {
                 <GraphBox>
                     <LineGraph
                         title={formatMessage({defaultMessage: 'TOTAL RUNS started per week over the last 12 weeks'})}
-                        labels={props.stats.runs_started_per_week_times.map(([start, _]) => DateTime.fromMillis(start).toLocaleString(DateTimeFormats.DATE_MED_NO_YEAR))}
+                        labels={props.stats.runs_started_per_week_times.map(([start]) => DateTime.fromMillis(start).toLocaleString(DateTimeFormats.DATE_MED_NO_YEAR))}
                         data={props.stats.runs_started_per_week}
                         tooltipTitleCallback={(date) => formatMessage({defaultMessage: 'Week of {date}'}, {date})}
                         tooltipLabelCallback={(numTotalRuns) => formatMessage({defaultMessage: '{numTotalRuns, plural, =0 {no runs started} =1 {# run started} other {# runs started}}'}, {numTotalRuns})}
@@ -163,7 +159,7 @@ const StatsView = (props: Props) => {
                 <GraphBox>
                     <BarGraph
                         title={formatMessage({defaultMessage: 'ACTIVE RUNS per day over the last 14 days'})}
-                        labels={props.stats.active_runs_per_day_times.map(([start, _]) => DateTime.fromMillis(start).toLocaleString(DateTimeFormats.DATE_MED_NO_YEAR))}
+                        labels={props.stats.active_runs_per_day_times.map(([start]) => DateTime.fromMillis(start).toLocaleString(DateTimeFormats.DATE_MED_NO_YEAR))}
                         data={props.stats.active_runs_per_day}
                         tooltipTitleCallback={(date) => formatMessage({defaultMessage: 'Day: {date}'}, {date})}
                         tooltipLabelCallback={(numActiveRuns) => formatMessage({defaultMessage: '{numActiveRuns, plural, =0 {no active runs} =1 {# active run} other {# active runs}}'}, {numActiveRuns})}
@@ -173,7 +169,7 @@ const StatsView = (props: Props) => {
                 <GraphBox>
                     <BarGraph
                         title={formatMessage({defaultMessage: 'ACTIVE PARTICIPANTS per day over the last 14 days'})}
-                        labels={props.stats.active_participants_per_day_times.map(([start, _]) => DateTime.fromMillis(start).toLocaleString(DateTimeFormats.DATE_MED_NO_YEAR))}
+                        labels={props.stats.active_participants_per_day_times.map(([start]) => DateTime.fromMillis(start).toLocaleString(DateTimeFormats.DATE_MED_NO_YEAR))}
                         data={props.stats.active_participants_per_day}
                         color={'--center-channel-color-40'}
                         tooltipTitleCallback={(date) => formatMessage({defaultMessage: 'Day: {date}'}, {date})}

@@ -2,62 +2,54 @@
 // See LICENSE.txt for license information.
 
 import styled, {css} from 'styled-components';
-import React, {useRef, useEffect, useMemo} from 'react';
-import {Switch, Route, Redirect, NavLink, useRouteMatch} from 'react-router-dom';
+import React, {useEffect, useMemo, useRef} from 'react';
+import {
+    NavLink,
+    Redirect,
+    Route,
+    Switch,
+    useRouteMatch,
+} from 'react-router-dom';
+import {generatePath} from 'react-router';
 
 import {useIntl} from 'react-intl';
 
 import {useIntersection} from 'react-use';
 import {selectTeam} from 'mattermost-redux/actions/teams';
-import {fetchMyChannelsAndMembers} from 'mattermost-redux/actions/channels';
+import {fetchMyChannelsAndMembersREST} from 'mattermost-redux/actions/channels';
 import {fetchMyCategories} from 'mattermost-redux/actions/channel_categories';
 import {useDispatch, useSelector} from 'react-redux';
-import {StarOutlineIcon, StarIcon} from '@mattermost/compass-icons/components';
-
+import {StarIcon, StarOutlineIcon} from '@mattermost/compass-icons/components';
 import {getCurrentUserId} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/common';
 
 import {pluginErrorUrl} from 'src/browser_routing';
-import {
-    useForceDocumentTitle,
-    useStats,
-} from 'src/hooks';
-
+import {useForceDocumentTitle, useStats} from 'src/hooks';
 import {telemetryEventForPlaybook} from 'src/client';
 import {ErrorPageTypes} from 'src/constants';
-
 import PlaybookUsage from 'src/components/backstage/playbook_usage';
 import PlaybookKeyMetrics from 'src/components/backstage/metrics/playbook_key_metrics';
-
 import {SemiBoldHeading} from 'src/styles/headings';
-
 import {HorizontalBG} from 'src/components/checklist/collapsible_checklist';
-
 import CopyLink from 'src/components/widgets/copy_link';
-
-import {usePlaybook, useUpdatePlaybook} from 'src/graphql/hooks';
-
+import {usePlaybook, useUpdatePlaybook, useUpdatePlaybookFavorite} from 'src/graphql/hooks';
 import MarkdownEdit from 'src/components/markdown_edit';
 import TextEdit from 'src/components/text_edit';
-
 import {PrimaryButton, TertiaryButton} from 'src/components/assets/buttons';
-
 import {CancelSaveContainer} from 'src/components/checklist_item/inputs';
-
 import Tooltip from 'src/components/widgets/tooltip';
-
 import {useDefaultRedirectOnTeamChange} from 'src/components/backstage/main_body';
 
-import Outline, {Sections, ScrollNav} from './outline/outline';
-
+import Outline, {ScrollNav, Sections} from './outline/outline';
 import * as Controls from './controls';
 
 const PlaybookEditor = () => {
     const {formatMessage} = useIntl();
     const dispatch = useDispatch();
-    const {url, path, params: {playbookId}} = useRouteMatch<{playbookId: string}>();
+    const {path, params: {playbookId}} = useRouteMatch<{playbookId: string}>();
 
     const [playbook, {error, loading, refetch}] = usePlaybook(playbookId);
     const updatePlaybook = useUpdatePlaybook(playbook?.id);
+    const updatePlaybookFavorite = useUpdatePlaybookFavorite(playbook?.id);
     const stats = useStats(playbookId);
     const currentUserId = useSelector(getCurrentUserId);
 
@@ -74,7 +66,7 @@ const PlaybookEditor = () => {
         }
 
         dispatch(selectTeam(teamId));
-        dispatch(fetchMyChannelsAndMembers(teamId));
+        dispatch(fetchMyChannelsAndMembersREST(teamId));
         dispatch(fetchMyCategories(teamId));
     }, [dispatch, playbook?.team_id, playbookId]);
 
@@ -117,7 +109,7 @@ const PlaybookEditor = () => {
     const FavoriteIcon = playbook.is_favorite ? StarIcon : StarOutlineIcon;
 
     const toggleFavorite = () => {
-        updatePlaybook({isFavorite: !playbook.is_favorite});
+        updatePlaybookFavorite(!playbook.is_favorite);
     };
 
     return (
@@ -242,20 +234,20 @@ const PlaybookEditor = () => {
             </Header>
             <NavBar>
                 <NavItem
-                    to={`${url}`}
+                    to={generatePath(path, {playbookId})}
                     exact={true}
                     onClick={() => telemetryEventForPlaybook(playbook.id, 'playbook_usage_tab_clicked')}
                 >
                     {formatMessage({defaultMessage: 'Usage'})}
                 </NavItem>
                 <NavItem
-                    to={`${url}/outline`}
+                    to={generatePath(path, {playbookId, tab: 'outline'})}
                     onClick={() => telemetryEventForPlaybook(playbook.id, 'playbook_outline_tab_clicked')}
                 >
                     {formatMessage({defaultMessage: 'Outline'})}
                 </NavItem>
                 <NavItem
-                    to={`${url}/reports`}
+                    to={generatePath(path, {playbookId, tab: 'reports'})}
                     onClick={() => telemetryEventForPlaybook(playbook.id, 'playbook_reports_tab_clicked')}
                 >
                     {formatMessage({defaultMessage: 'Reports'})}
@@ -263,7 +255,7 @@ const PlaybookEditor = () => {
             </NavBar>
             <Switch>
                 <Route
-                    path={`${path}`}
+                    path={generatePath(path, {playbookId})}
                     exact={true}
                 >
                     <PlaybookUsage
@@ -271,13 +263,19 @@ const PlaybookEditor = () => {
                         stats={stats}
                     />
                 </Route>
-                <Route path={`${path}/outline`}>
+                <Route
+                    path={generatePath(path, {playbookId, tab: 'outline'})}
+                    exact={true}
+                >
                     <Outline
                         playbook={playbook}
                         refetch={refetch}
                     />
                 </Route>
-                <Route path={`${path}/reports`}>
+                <Route
+                    path={generatePath(path, {playbookId, tab: 'reports'})}
+                    exact={true}
+                >
                     <PlaybookKeyMetrics
                         playbookID={playbook.id}
                         playbookMetrics={playbook.metrics}
@@ -446,6 +444,7 @@ const TitleHeaderBackdrop = styled.div`
 `;
 
 const Editor = styled.main<{$headingVisible: boolean}>`
+    height: fit-content;
     min-height: 100%;
     display: grid;
     background-color: rgba(var(--center-channel-color-rgb), 0.04);

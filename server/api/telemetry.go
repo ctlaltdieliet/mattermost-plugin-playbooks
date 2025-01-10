@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 
 	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/bot"
@@ -95,14 +95,14 @@ func (h *TelemetryHandler) createEvent(c *Context, w http.ResponseWriter, r *htt
 			h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "invalid page tracking", err)
 			return
 		}
-		h.genericTelemetry.Page(name, event.Properties)
+		h.genericTelemetry.Page(*name, event.Properties)
 	case app.TelemetryTypeTrack:
 		name, err := app.NewTelemetryTrack(event.Name)
 		if err != nil {
 			h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "invalid event tracking", err)
 			return
 		}
-		h.genericTelemetry.Track(name, event.Properties)
+		h.genericTelemetry.Track(*name, event.Properties)
 	default:
 		h.HandleErrorWithCode(w, c.logger, http.StatusBadRequest, "invalid type to be tracked", nil)
 		return
