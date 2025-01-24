@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -39,9 +39,9 @@ const MetricsStatsView = ({playbookMetrics, stats}: Props) => {
 
 const MetricHeader = ({metric}: { metric: Metric }) => {
     let icon = <DollarSign sizePx={18}/>;
-    if (metric.type === MetricType.Integer) {
+    if (metric.type === MetricType.MetricInteger) {
         icon = <PoundSign sizePx={18}/>;
-    } else if (metric.type === MetricType.Duration) {
+    } else if (metric.type === MetricType.MetricDuration) {
         icon = <ClockOutline sizePx={18}/>;
     }
 

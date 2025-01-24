@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import styled, {css} from 'styled-components';
@@ -6,8 +6,6 @@ import {useRouteMatch} from 'react-router-dom';
 import React from 'react';
 
 import StatusBadge from 'src/components/backstage/status_badge';
-
-import {SecondaryButton} from 'src/components/assets/buttons';
 
 import {BaseInput} from 'src/components/assets/inputs';
 import {getSiteUrl} from 'src/client';
@@ -20,22 +18,6 @@ export const Content = styled.div`
     padding: 0 8px 4px;
     border: 1px solid rgba(var(--center-channel-color-rgb), 0.08);
     border-radius: 8px;
-`;
-
-export const SecondaryButtonSmaller = styled(SecondaryButton)`
-    padding: 0 20px;
-    height: 26px;
-    font-size: 12px;
-    margin-left: 20px;
-`;
-
-export const SecondaryButtonLarger = styled(SecondaryButtonSmaller)`
-    padding: 0 16px;
-    height: 36px;
-`;
-
-export const SecondaryButtonLargerRight = styled(SecondaryButtonLarger)`
-    margin-left: auto;
 `;
 
 export const ExpandRight = styled.div`

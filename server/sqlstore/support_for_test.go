@@ -1,19 +1,23 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package sqlstore
 
 import (
 	"database/sql"
 	"testing"
 
-	"github.com/blang/semver"
-	mock_app "github.com/mattermost/mattermost-plugin-playbooks/server/app/mocks"
-
 	sq "github.com/Masterminds/squirrel"
+	"github.com/blang/semver"
 	"github.com/golang/mock/gomock"
 	"github.com/jmoiron/sqlx"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/store/storetest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
+	mock_app "github.com/mattermost/mattermost-plugin-playbooks/server/app/mocks"
 )
 
 var driverNames = []string{model.DatabaseDriverPostgres, model.DatabaseDriverMysql}

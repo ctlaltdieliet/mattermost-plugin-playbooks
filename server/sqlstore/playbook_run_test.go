@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package sqlstore
 
 import (
@@ -8,17 +11,18 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/guregu/null.v4"
-
 	sq "github.com/Masterminds/squirrel"
 	"github.com/golang/mock/gomock"
 	"github.com/jmoiron/sqlx"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	mock_sqlstore "github.com/mattermost/mattermost-plugin-playbooks/server/sqlstore/mocks"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/guregu/null.v4"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
+	mock_sqlstore "github.com/mattermost/mattermost-plugin-playbooks/server/sqlstore/mocks"
 )
 
 func TestCreateAndGetPlaybookRun(t *testing.T) {
@@ -272,7 +276,7 @@ func TestUpdatePlaybookRun(t *testing.T) {
 					old.MetricsData = generateMetricData(pbWithMetrics)
 
 					//first update will insert rows
-					err = playbookRunStore.UpdatePlaybookRun(&old)
+					_, err = playbookRunStore.UpdatePlaybookRun(&old)
 					require.NoError(t, err)
 
 					//second update will update values
@@ -294,7 +298,7 @@ func TestUpdatePlaybookRun(t *testing.T) {
 
 				expected := testCase.Update(*returned)
 
-				err = playbookRunStore.UpdatePlaybookRun(expected)
+				_, err = playbookRunStore.UpdatePlaybookRun(expected)
 
 				if testCase.ExpectedErr != nil {
 					require.Error(t, err)
@@ -340,7 +344,7 @@ func TestIfDeletedMetricsAreOmitted(t *testing.T) {
 
 		// store metrics values
 		playbookRun.MetricsData = generateMetricData(playbook)
-		err = playbookRunStore.UpdatePlaybookRun(playbookRun)
+		_, err = playbookRunStore.UpdatePlaybookRun(playbookRun)
 		require.NoError(t, err)
 
 		// delete one metric config from playbook
@@ -388,8 +392,6 @@ func TestRestorePlaybookRun(t *testing.T) {
 
 // intended to catch problems with the code assembling StatusPosts
 func TestStressTestGetPlaybookRuns(t *testing.T) {
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	// Change these to larger numbers to stress test. Keep them low for CI.
 	numPlaybookRuns := 100
 	postsPerPlaybookRun := 3
@@ -438,8 +440,6 @@ func TestStressTestGetPlaybookRuns(t *testing.T) {
 func TestStressTestGetPlaybookRunsStats(t *testing.T) {
 	// don't need to assemble stats in CI
 	t.SkipNow()
-
-	rand.Seed(time.Now().UTC().UnixNano())
 
 	// Change these to larger numbers to stress test.
 	numPlaybookRuns := 1000
@@ -544,17 +544,19 @@ func TestGetPlaybookRunIDForChannel(t *testing.T) {
 			require.NoError(t, err)
 			createPlaybookRunChannel(t, store, playbookRun2)
 
-			id1, err := playbookRunStore.GetPlaybookRunIDForChannel(playbookRun1.ChannelID)
+			ids1, err := playbookRunStore.GetPlaybookRunIDsForChannel(playbookRun1.ChannelID)
 			require.NoError(t, err)
-			require.Equal(t, returned1.ID, id1)
-			id2, err := playbookRunStore.GetPlaybookRunIDForChannel(playbookRun2.ChannelID)
+			require.Len(t, ids1, 1)
+			require.Equal(t, returned1.ID, ids1[0])
+			ids2, err := playbookRunStore.GetPlaybookRunIDsForChannel(playbookRun2.ChannelID)
 			require.NoError(t, err)
-			require.Equal(t, returned2.ID, id2)
+			require.Len(t, ids2, 1)
+			require.Equal(t, returned2.ID, ids2[0])
 		})
 		t.Run("fail to retrieve non-existing playbookRunID", func(t *testing.T) {
-			id1, err := playbookRunStore.GetPlaybookRunIDForChannel("nonexistingid")
+			ids1, err := playbookRunStore.GetPlaybookRunIDsForChannel("nonexistingid")
 			require.Error(t, err)
-			require.Equal(t, "", id1)
+			require.Len(t, ids1, 0)
 			require.True(t, strings.HasPrefix(err.Error(),
 				"channel with id (nonexistingid) does not have a playbook run"))
 		})
@@ -777,13 +779,12 @@ func TestTasksAndRunsDigest(t *testing.T) {
 
 			// don't make assumptions about ordering until we figure that out PM-side
 			expected := map[string][]string{
-				channel01.Name: inc01TaskTitles,
-				channel02.Name: inc02TaskTitles,
+				inc01.Name: inc01TaskTitles,
+				inc02.Name: inc02TaskTitles,
 			}
-
 			for _, run := range runs {
 				for _, task := range run.Tasks {
-					require.Contains(t, expected[run.ChannelName], task.Title)
+					require.Contains(t, expected[run.Name], task.Title)
 				}
 			}
 		})
@@ -798,16 +799,16 @@ func TestTasksAndRunsDigest(t *testing.T) {
 
 			// don't make assumptions about ordering until we figure that out PM-side
 			expected := map[string]int{
-				channel01.Name: 1,
-				channel02.Name: 1,
-				channel03.Name: 1,
-				channel06.Name: 1,
+				inc01.Name: 1,
+				inc02.Name: 1,
+				inc03.Name: 1,
+				inc06.Name: 1,
 			}
 
 			actual := make(map[string]int)
 
 			for _, run := range runs {
-				actual[run.ChannelName]++
+				actual[run.Name]++
 			}
 
 			require.Equal(t, expected, actual)
@@ -823,14 +824,14 @@ func TestTasksAndRunsDigest(t *testing.T) {
 
 			// don't make assumptions about ordering until we figure that out PM-side
 			expected := map[string]int{
-				channel01.Name: 1,
-				channel02.Name: 1,
+				inc01.Name: 1,
+				inc02.Name: 1,
 			}
 
 			actual := make(map[string]int)
 
 			for _, run := range runs {
-				actual[run.ChannelName]++
+				actual[run.Name]++
 			}
 
 			require.Equal(t, expected, actual)
@@ -1038,12 +1039,10 @@ func TestGetFollowersActiveTotal(t *testing.T) {
 	}
 
 	alice := userInfo{
-		ID:   model.NewId(),
-		Name: "alice",
+		ID: model.NewId(),
 	}
 	bob := userInfo{
-		ID:   model.NewId(),
-		Name: "bob",
+		ID: model.NewId(),
 	}
 	followers := []string{alice.ID, bob.ID}
 	teamID := model.NewId()
@@ -1171,7 +1170,7 @@ func TestGetParticipantsActiveTotal(t *testing.T) {
 			createRuns(store, playbookRunStore, playbook1ID, []userInfo{alice, bob, bot1}, team1ID, 3, app.StatusInProgress)
 			createRuns(store, playbookRunStore, playbook2ID, []userInfo{tom, bob}, team2ID, 5, app.StatusInProgress)
 
-			expected := 2*3 + 2*5 // ignore bots
+			expected := 3*3 + 2*5
 			actual, err := playbookRunStore.GetParticipantsActiveTotal()
 			require.NoError(t, err)
 			require.Equal(t, int64(expected), actual)
@@ -1250,6 +1249,79 @@ func TestGetSchemeRolesForChannel(t *testing.T) {
 	}
 }
 
+func TestGetPlaybookRunIDsForUser(t *testing.T) {
+	for _, driverName := range driverNames {
+		db := setupTestDB(t, driverName)
+		playbookRunStore := setupPlaybookRunStore(t, db)
+		store := setupSQLStore(t, db)
+		setupTeamMembersTable(t, db)
+
+		alice := userInfo{
+			ID:   model.NewId(),
+			Name: "alice",
+		}
+		bob := userInfo{
+			ID:   model.NewId(),
+			Name: "bob",
+		}
+		tom := userInfo{
+			ID:   model.NewId(),
+			Name: "tom",
+		}
+		allIDs := []string{}
+		teamID := model.NewId()
+		addUsersToTeam(t, store, []userInfo{alice, bob, tom}, teamID)
+
+		for i := 0; i < 10; i++ {
+			run := NewBuilder(t).WithTeamID(teamID).ToPlaybookRun()
+
+			returned, err := playbookRunStore.CreatePlaybookRun(run)
+			require.NoError(t, err)
+
+			allIDs = append(allIDs, returned.ID)
+		}
+
+		t.Run("no runs for user", func(t *testing.T) {
+			returnedIDs, err := playbookRunStore.GetPlaybookRunIDsForUser(alice.ID)
+			require.NoError(t, err)
+			require.Len(t, returnedIDs, 0)
+		})
+
+		t.Run("all runs for user", func(t *testing.T) {
+			for _, id := range allIDs {
+				addUsersToRuns(t, store, []userInfo{tom}, []string{id})
+			}
+			returnedIDs, err := playbookRunStore.GetPlaybookRunIDsForUser(tom.ID)
+			require.NoError(t, err)
+			require.Len(t, returnedIDs, len(allIDs))
+		})
+
+		t.Run("some runs for user", func(t *testing.T) {
+			for i := 0; i < len(allIDs)/2; i++ {
+				addUsersToRuns(t, store, []userInfo{bob}, []string{allIDs[i]})
+			}
+			returnedIDs, err := playbookRunStore.GetPlaybookRunIDsForUser(bob.ID)
+			require.NoError(t, err)
+			require.Len(t, returnedIDs, len(allIDs)/2)
+		})
+
+		t.Run("remove user from team", func(t *testing.T) {
+			for _, id := range allIDs {
+				addUsersToRuns(t, store, []userInfo{alice}, []string{id})
+			}
+			updateBuilder := store.builder.Update("TeamMembers").
+				Set("DeleteAt", model.GetMillis()).
+				Where(sq.And{sq.Eq{"TeamID": teamID}, sq.Eq{"UserID": alice.ID}})
+			_, err := store.execBuilder(store.db, updateBuilder)
+			require.NoError(t, err)
+
+			returnedIDs, err := playbookRunStore.GetPlaybookRunIDsForUser(alice.ID)
+			require.NoError(t, err)
+			require.Len(t, returnedIDs, 0)
+		})
+	}
+}
+
 // PlaybookRunBuilder is a utility to build playbook runs with a default base.
 // Use it as:
 // NewBuilder.WithName("name").WithXYZ(xyz)....ToPlaybookRun()
@@ -1272,6 +1344,7 @@ func NewBuilder(t testing.TB) *PlaybookRunBuilder {
 			PlaybookID:    model.NewId(),
 			Checklists:    nil,
 			CurrentStatus: "InProgress",
+			Type:          app.RunTypePlaybook,
 		},
 	}
 }

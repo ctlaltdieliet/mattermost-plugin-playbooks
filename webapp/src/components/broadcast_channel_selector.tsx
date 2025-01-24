@@ -1,9 +1,11 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
 
 import styled from 'styled-components';
+
+import {useIntl} from 'react-intl';
 
 import ChannelSelector from 'src/components/backstage/channel_selector';
 import ClearIcon from 'src/components/assets/icons/clear_icon';
@@ -19,6 +21,8 @@ interface Props {
 }
 
 const BroadcastChannelSelector = (props: Props) => {
+    const {formatMessage} = useIntl();
+
     return (
         <StyledChannelSelector
             id={props.id}
@@ -29,8 +33,9 @@ const BroadcastChannelSelector = (props: Props) => {
             isDisabled={!props.enabled}
             captureMenuScroll={false}
             shouldRenderValue={true}
-            placeholder={'Select channels'}
+            placeholder={formatMessage({defaultMessage: 'Select channels'})}
             teamId={props.teamId}
+            isMulti={true}
         />
     );
 };
@@ -72,7 +77,7 @@ const MultiValueRemove = (props: MultiValueRemoveProps) => (
 
 const StyledClearIcon = styled(ClearIcon)`
     color: rgba(var(--center-channel-color-rgb), 0.32);
-    font-size: 15px;
+    font-size: 14px;
     cursor: pointer;
 
     :hover {

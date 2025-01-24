@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useMemo} from 'react';
@@ -6,12 +6,13 @@ import React, {useMemo} from 'react';
 import DateTimeSelector from 'src/components/datetime_selector';
 
 import {
-    useMakeOption,
-    ms,
     Mode,
     Option,
+    ms,
+    useMakeOption,
 } from 'src/components/datetime_input';
-import {Placeholder} from '../section_status_updates';
+
+import {Placeholder} from 'src/components/backstage/playbook_editor/outline/section_status_updates';
 
 interface Props {
     seconds: number;

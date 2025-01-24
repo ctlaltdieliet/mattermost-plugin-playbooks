@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import React, {ReactNode} from 'react';
 import styled from 'styled-components';
 
@@ -105,8 +108,8 @@ const BroadcastChannels = (props: Props) => {
                 closeMenuOnSelect={false}
                 controlShouldRenderValue={false}
                 menuIsOpen={true}
-                classNamePrefix='playbook-run-user-select'
-                className='playbook-run-user-select'
+                classNamePrefix='playbook-react-select'
+                className='playbook-react-select'
                 id={props.id}
                 isMulti={false}
                 options={selectableChannels}

@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package client
 
 import (
@@ -23,7 +26,7 @@ func (s *TelemetryService) CreateEvent(ctx context.Context, name string, eventTy
 		Properties: properties,
 	}
 
-	req, err := s.client.newRequest(http.MethodPost, "telemetry", payload)
+	req, err := s.client.newAPIRequest(http.MethodPost, "telemetry", payload)
 	if err != nil {
 		return err
 	}

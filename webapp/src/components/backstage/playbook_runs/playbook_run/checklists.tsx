@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -24,7 +24,7 @@ const Checklists = ({id, playbookRun, role}: Props) => {
                 id={id}
                 playbookRun={playbookRun}
                 parentContainer={ChecklistParent.RunDetails}
-                viewerMode={role === Role.Viewer}
+                readOnly={role === Role.Viewer}
             />
         </Container>
     );

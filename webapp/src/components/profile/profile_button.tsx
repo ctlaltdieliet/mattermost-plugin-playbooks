@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -10,7 +10,6 @@ interface Props {
     userId?: string;
     enableEdit: boolean;
     withoutProfilePic?: boolean;
-    withoutName?: boolean;
     profileButtonClass?: string;
     customDropdownArrow?: React.ReactNode;
     onClick: () => void;
@@ -41,7 +40,6 @@ export default function ProfileButton(props: Props) {
                 extra={downChevron}
                 nameFormatter={formatName}
                 withoutProfilePic={props.withoutProfilePic}
-                withoutName={props.withoutName}
             />
         </Button>
     );

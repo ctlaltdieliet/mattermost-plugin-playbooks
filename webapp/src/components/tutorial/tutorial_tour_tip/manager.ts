@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useCallback, useEffect, useState} from 'react';
@@ -12,9 +12,9 @@ import {savePreferences as storeSavePreferences} from 'mattermost-redux/actions/
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/common';
 import {Client4} from 'mattermost-redux/client';
 
-import {FINISHED, SKIPPED, TTCategoriesMapToSteps} from '../tours';
+import {FINISHED, SKIPPED, TTCategoriesMapToSteps} from 'src/components/tutorial/tours';
 
-import {isKeyPressed, KeyCodes} from 'src/utils';
+import {KeyCodes, isKeyPressed} from 'src/utils';
 
 export interface TutorialTourTipManager {
     show: boolean;

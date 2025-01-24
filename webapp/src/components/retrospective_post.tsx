@@ -1,14 +1,24 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import React from 'react';
 import styled from 'styled-components';
 
 import {Post} from '@mattermost/types/posts';
 
 import {CustomPostContainer, CustomPostContent} from 'src/components/custom_post_styles';
-import {messageHtmlToComponent, formatText} from 'src/webapp_globals';
+import {formatText, messageHtmlToComponent} from 'src/webapp_globals';
 
 import {Metric, MetricType} from 'src/types/playbook';
 
 import {RunMetricData} from 'src/types/playbook_run';
+
+import {
+    isArrayOf,
+    isMetric,
+    isMetricData,
+    safeJSONParse,
+} from 'src/utils';
 
 import {ClockOutline, DollarSign, PoundSign} from './backstage/playbook_edit/styles';
 import {metricToString} from './backstage/playbook_edit/metrics/shared';
@@ -27,10 +37,17 @@ export const RetrospectivePost = (props: Props) => {
         atMentions: true,
     };
 
-    const mdText = (text: string) => messageHtmlToComponent(formatText(text, markdownOptions), true, {});
+    const messageHtmlToComponentOptions = {
+        hasPluginTooltips: true,
+    };
 
-    const metricsConfigs: Array<Metric> = JSON.parse(props.post.props.metricsConfigs);
-    const metricsData: Array<RunMetricData> = JSON.parse(props.post.props.metricsData);
+    const mdText = (text: string) => messageHtmlToComponent(formatText(text, markdownOptions), true, messageHtmlToComponentOptions);
+
+    const parsedMetricsConfigs = safeJSONParse<unknown>(props.post.props?.metricsConfigs);
+    const parsedMetricsData = safeJSONParse<unknown>(props.post.props?.metricsData);
+
+    const metricsConfigs: Array<Metric> = isArrayOf(parsedMetricsConfigs, isMetric) ? parsedMetricsConfigs : [];
+    const metricsData: Array<RunMetricData> = isArrayOf(parsedMetricsData, isMetricData) ? parsedMetricsData : [];
 
     return (
         <>
@@ -156,13 +173,13 @@ function getMetricInputIcon(metricType: string, colorName: string) {
             sizePx={24}
             color={colorName}
         />);
-    if (metricType === MetricType.Integer) {
+    if (metricType === MetricType.MetricInteger) {
         inputIcon = (
             <PoundSign
                 sizePx={24}
                 color={colorName}
             />);
-    } else if (metricType === MetricType.Duration) {
+    } else if (metricType === MetricType.MetricDuration) {
         inputIcon = (
             <ClockOutline
                 sizePx={24}

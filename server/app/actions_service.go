@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import (
@@ -6,13 +9,15 @@ import (
 	"sync"
 	"time"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/bot"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/bot"
+	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
+	"github.com/mattermost/mattermost-plugin-playbooks/server/safemapstructure"
 )
 
 type PlaybookGetter interface {
@@ -115,68 +120,6 @@ func (a *channelActionServiceImpl) GetChannelActions(channelID string, options G
 	return a.store.GetChannelActions(channelID, options)
 }
 
-func (a *channelActionServiceImpl) Validate(action GenericChannelAction) error {
-	// Validate the trigger type and action types
-	switch action.TriggerType {
-	case TriggerTypeNewMemberJoins:
-		switch action.ActionType {
-		case ActionTypeWelcomeMessage:
-			break
-		case ActionTypeCategorizeChannel:
-			break
-		default:
-			return fmt.Errorf("action type %q is not valid for trigger type %q", action.ActionType, action.TriggerType)
-		}
-	case TriggerTypeKeywordsPosted:
-		if action.ActionType != ActionTypePromptRunPlaybook {
-			return fmt.Errorf("action type %q is not valid for trigger type %q", action.ActionType, action.TriggerType)
-		}
-	default:
-		return fmt.Errorf("trigger type %q not recognized", action.TriggerType)
-	}
-
-	// Validate the payload depending on the action type
-	switch action.ActionType {
-	case ActionTypeWelcomeMessage:
-		var payload WelcomeMessagePayload
-		if err := mapstructure.Decode(action.Payload, &payload); err != nil {
-			return fmt.Errorf("unable to decode payload from action")
-		}
-	case ActionTypePromptRunPlaybook:
-		var payload PromptRunPlaybookFromKeywordsPayload
-		if err := mapstructure.Decode(action.Payload, &payload); err != nil {
-			return fmt.Errorf("unable to decode payload from action")
-		}
-		if err := checkValidPromptRunPlaybookFromKeywordsPayload(payload); err != nil {
-			return err
-		}
-	case ActionTypeCategorizeChannel:
-		var payload CategorizeChannelPayload
-		if err := mapstructure.Decode(action.Payload, &payload); err != nil {
-			return fmt.Errorf("unable to decode payload from action")
-		}
-
-	default:
-		return fmt.Errorf("action type %q not recognized", action.ActionType)
-	}
-
-	return nil
-}
-
-func checkValidPromptRunPlaybookFromKeywordsPayload(payload PromptRunPlaybookFromKeywordsPayload) error {
-	for _, keyword := range payload.Keywords {
-		if keyword == "" {
-			return fmt.Errorf("payload field 'keywords' must contain only non-empty keywords")
-		}
-	}
-
-	if payload.PlaybookID != "" && !model.IsValidId(payload.PlaybookID) {
-		return fmt.Errorf("payload field 'playbook_id' must be a valid ID")
-	}
-
-	return nil
-}
-
 func (a *channelActionServiceImpl) Update(action GenericChannelAction, userID string) error {
 	oldAction, err := a.Get(action.ID)
 	if err != nil {
@@ -203,13 +146,13 @@ func (a *channelActionServiceImpl) Update(action GenericChannelAction, userID st
 func (a *channelActionServiceImpl) UserHasJoinedChannel(userID, channelID, actorID string) {
 	user, err := a.api.User.Get(userID)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to resolve user for userID '%s'", userID)
+		logrus.WithError(err).WithField("user_id", userID).Error("failed to resolve user")
 		return
 	}
 
 	channel, err := a.api.Channel.Get(channelID)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to resolve channel for channelID '%s'", channelID)
+		logrus.WithError(err).WithField("channel_id", channelID).Error("failed to resolve channel")
 		return
 	}
 
@@ -222,7 +165,7 @@ func (a *channelActionServiceImpl) UserHasJoinedChannel(userID, channelID, actor
 		TriggerType: TriggerTypeNewMemberJoins,
 	})
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to get the channel actions for channelID %q", channelID)
+		logrus.WithError(err).WithField("channel_id", channelID).Error("failed to get the channel actions")
 		return
 	}
 
@@ -231,7 +174,7 @@ func (a *channelActionServiceImpl) UserHasJoinedChannel(userID, channelID, actor
 			"action_type":  ActionTypeCategorizeChannel,
 			"trigger_type": TriggerTypeNewMemberJoins,
 			"num_actions":  len(actions),
-		}).Errorf("expected only one action to be retrived")
+		}).Error("expected only one action to be retrieved")
 	}
 
 	if len(actions) != 1 {
@@ -244,7 +187,7 @@ func (a *channelActionServiceImpl) UserHasJoinedChannel(userID, channelID, actor
 	}
 
 	var payload CategorizeChannelPayload
-	if err := mapstructure.Decode(action.Payload, &payload); err != nil {
+	if err = safemapstructure.Decode(action.Payload, &payload); err != nil {
 		logrus.WithError(err).Error("unable to decode payload of CategorizeChannelPayload")
 		return
 	}
@@ -366,7 +309,7 @@ func (a *channelActionServiceImpl) CheckAndSendMessageOnJoin(userID, channelID s
 	for _, action := range actions {
 		if action.ActionType == ActionTypeWelcomeMessage {
 			var payload WelcomeMessagePayload
-			if err := mapstructure.Decode(action.Payload, &payload); err != nil {
+			if err := safemapstructure.Decode(action.Payload, &payload); err != nil {
 				logrus.WithError(err).WithField("action_type", action.ActionType).Error("payload of action is not valid")
 			}
 
@@ -382,7 +325,7 @@ func (a *channelActionServiceImpl) CheckAndSendMessageOnJoin(userID, channelID s
 	return true
 }
 
-func (a *channelActionServiceImpl) MessageHasBeenPosted(sessionID string, post *model.Post) {
+func (a *channelActionServiceImpl) MessageHasBeenPosted(post *model.Post) {
 	if post.IsSystemMessage() || a.keywordsThreadIgnorer.IsIgnored(post.RootId, post.UserId) || a.poster.IsFromPoster(post) {
 		return
 	}
@@ -404,12 +347,6 @@ func (a *channelActionServiceImpl) MessageHasBeenPosted(sessionID string, post *
 		return
 	}
 
-	session, err := a.api.Session.Get(sessionID)
-	if err != nil {
-		logrus.WithError(err).WithField("session_id", sessionID).Error("can't get session")
-		return
-	}
-
 	triggeredPlaybooksMap := make(map[string]Playbook)
 	presentTriggers := []string{}
 	for _, action := range actions {
@@ -418,7 +355,7 @@ func (a *channelActionServiceImpl) MessageHasBeenPosted(sessionID string, post *
 		}
 
 		var payload PromptRunPlaybookFromKeywordsPayload
-		if err := mapstructure.Decode(action.Payload, &payload); err != nil {
+		if err := safemapstructure.Decode(action.Payload, &payload); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"payload":     payload,
 				"actionType":  action.ActionType,
@@ -448,7 +385,7 @@ func (a *channelActionServiceImpl) MessageHasBeenPosted(sessionID string, post *
 		}
 
 		if actionExecuted {
-			a.telemetry.RunChannelAction(action, session.UserId)
+			a.telemetry.RunChannelAction(action, post.UserId)
 		}
 	}
 
@@ -462,7 +399,7 @@ func (a *channelActionServiceImpl) MessageHasBeenPosted(sessionID string, post *
 	}
 
 	message := getPlaybookSuggestionsMessage(triggeredPlaybooks, presentTriggers)
-	attachment := getPlaybookSuggestionsSlackAttachment(triggeredPlaybooks, post.Id, session.IsMobileApp(), a.configService.GetManifest().Id)
+	attachment := getPlaybookSuggestionsSlackAttachment(triggeredPlaybooks, post.Id, a.configService.GetManifest().Id)
 
 	rootID := post.RootId
 	if rootID == "" {
@@ -498,7 +435,7 @@ func getPlaybookSuggestionsMessage(suggestedPlaybooks []Playbook, triggers []str
 	return message
 }
 
-func getPlaybookSuggestionsSlackAttachment(playbooks []Playbook, postID string, isMobile bool, pluginID string) *model.SlackAttachment {
+func getPlaybookSuggestionsSlackAttachment(playbooks []Playbook, triggeringPostID string, pluginID string) *model.SlackAttachment {
 	ignoreButton := &model.PostAction{
 		Id:   "ignoreKeywordsButton",
 		Name: "No, ignore thread",
@@ -506,7 +443,7 @@ func getPlaybookSuggestionsSlackAttachment(playbooks []Playbook, postID string, 
 		Integration: &model.PostActionIntegration{
 			URL: fmt.Sprintf("/plugins/%s/api/v0/signal/keywords/ignore-thread", pluginID),
 			Context: map[string]interface{}{
-				"postID": postID,
+				"postID": triggeringPostID,
 			},
 		},
 	}
@@ -519,9 +456,8 @@ func getPlaybookSuggestionsSlackAttachment(playbooks []Playbook, postID string, 
 			Integration: &model.PostActionIntegration{
 				URL: fmt.Sprintf("/plugins/%s/api/v0/signal/keywords/run-playbook", pluginID),
 				Context: map[string]interface{}{
-					"postID":          postID,
+					"postID":          triggeringPostID,
 					"selected_option": playbooks[0].ID,
-					"isMobile":        isMobile,
 				},
 			},
 			Style: "primary",
@@ -549,8 +485,7 @@ func getPlaybookSuggestionsSlackAttachment(playbooks []Playbook, postID string, 
 		Integration: &model.PostActionIntegration{
 			URL: fmt.Sprintf("/plugins/%s/api/v0/signal/keywords/run-playbook", pluginID),
 			Context: map[string]interface{}{
-				"isMobile": isMobile,
-				"postID":   postID,
+				"postID": triggeringPostID,
 			},
 		},
 		Options: options,

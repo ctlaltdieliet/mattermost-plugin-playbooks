@@ -1,10 +1,25 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
+
+	"github.com/MicahParks/keyfunc/v3"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
+	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
+	"github.com/mattermost/mattermost/server/public/shared/i18n"
 
 	"github.com/mattermost/mattermost-plugin-playbooks/server/api"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
@@ -16,14 +31,8 @@ import (
 	"github.com/mattermost/mattermost-plugin-playbooks/server/scheduler"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/sqlstore"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/telemetry"
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin"
-	"github.com/mattermost/mattermost-server/v6/shared/i18n"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
-	"github.com/mattermost/mattermost-plugin-api/cluster"
+	_ "time/tzdata" // for systems that don't have tzdata installed
 )
 
 const (
@@ -32,12 +41,9 @@ const (
 	metricsExposePort = ":9093"
 )
 
-// These credentials for Rudder need to be populated at build-time,
-// passing the following flags to the go build command:
-// -ldflags "-X main.rudderDataplaneURL=<url> -X main.rudderWriteKey=<write_key>"
-var (
-	rudderDataplaneURL string
-	rudderWriteKey     string
+const (
+	rudderDataplaneURL = "https://pdat.matterlytics.com"
+	rudderWriteKey     = "1ag0Mv7LPf5uJNhcnKomqg0ENFd"
 )
 
 type TelemetryClient interface {
@@ -70,6 +76,10 @@ type Plugin struct {
 	telemetryClient      TelemetryClient
 	licenseChecker       app.LicenseChecker
 	metricsService       *metrics.Metrics
+
+	cancelRunning     context.CancelFunc
+	cancelRunningLock sync.Mutex
+	tabAppJWTKeyFunc  keyfunc.Keyfunc
 }
 
 type StatusRecorder struct {
@@ -102,6 +112,13 @@ func (p *Plugin) OnActivate() error {
 	pluginAPIClient := pluginapi.NewClient(p.API, p.Driver)
 	p.pluginAPI = pluginAPIClient
 
+	if !pluginapi.IsE20LicensedOrDevelopment(
+		pluginAPIClient.Configuration.GetConfig(),
+		pluginAPIClient.System.GetLicense(),
+	) {
+		return errors.New("this plugin requires an enterprise license")
+	}
+
 	p.config = config.NewConfigService(pluginAPIClient, manifest)
 
 	logger := logrus.StandardLogger()
@@ -121,7 +138,6 @@ func (p *Plugin) OnActivate() error {
 
 	err = p.config.UpdateConfiguration(func(c *config.Configuration) {
 		c.BotUserID = botID
-		c.AdminLogLevel = "debug"
 	})
 	if err != nil {
 		return errors.Wrapf(err, "failed save bot to config")
@@ -131,9 +147,9 @@ func (p *Plugin) OnActivate() error {
 		logrus.Warn("Rudder credentials are not set. Disabling analytics.")
 		p.telemetryClient = &telemetry.NoopTelemetry{}
 	} else {
-		diagnosticID := pluginAPIClient.System.GetDiagnosticID()
+		telemetryID := pluginAPIClient.System.GetTelemetryID()
 		serverVersion := pluginAPIClient.System.GetServerVersion()
-		p.telemetryClient, err = telemetry.NewRudder(rudderDataplaneURL, rudderWriteKey, diagnosticID, manifest.Version, serverVersion)
+		p.telemetryClient, err = telemetry.NewRudder(rudderDataplaneURL, rudderWriteKey, telemetryID, manifest.Version, serverVersion)
 		if err != nil {
 			return errors.Wrapf(err, "failed init telemetry client")
 		}
@@ -157,6 +173,19 @@ func (p *Plugin) OnActivate() error {
 
 	toggleTelemetry()
 	p.config.RegisterConfigChangeListener(toggleTelemetry)
+
+	setupTeamsTabApp := func() {
+		err := p.setupTeamsTabApp()
+		if err != nil {
+			logrus.WithError(err).Error("failed to setup teams tab app")
+		}
+	}
+
+	setupTeamsTabApp()
+	p.config.RegisterConfigChangeListener(func() {
+		// Run this asynchronously, since we may update the config when saving the bot.
+		go setupTeamsTabApp()
+	})
 
 	apiClient := sqlstore.NewClient(pluginAPIClient)
 	p.bot = bot.New(pluginAPIClient, p.config.GetConfiguration().BotUserID, p.config, p.telemetryClient)
@@ -190,6 +219,7 @@ func (p *Plugin) OnActivate() error {
 		p.bot,
 		p.config,
 		scheduler,
+		p.telemetryClient,
 		p.telemetryClient,
 		p.API,
 		p.playbookService,
@@ -228,6 +258,7 @@ func (p *Plugin) OnActivate() error {
 		p.config,
 		p.permissions,
 		playbookStore,
+		playbookRunStore,
 		p.licenseChecker,
 	)
 	api.NewPlaybookHandler(
@@ -250,10 +281,19 @@ func (p *Plugin) OnActivate() error {
 	api.NewStatsHandler(p.handler.APIRouter, pluginAPIClient, statsStore, p.playbookService, p.permissions, p.licenseChecker)
 	api.NewBotHandler(p.handler.APIRouter, pluginAPIClient, p.bot, p.config, p.playbookRunService, p.userInfoStore)
 	api.NewTelemetryHandler(p.handler.APIRouter, p.playbookRunService, pluginAPIClient, p.telemetryClient, p.playbookService, p.telemetryClient, p.telemetryClient, p.telemetryClient, p.permissions)
-	api.NewSignalHandler(p.handler.APIRouter, pluginAPIClient, p.playbookRunService, p.playbookService, keywordsThreadIgnorer)
+	api.NewSignalHandler(p.handler.APIRouter, pluginAPIClient, p.playbookRunService, p.playbookService, keywordsThreadIgnorer, p.bot)
 	api.NewSettingsHandler(p.handler.APIRouter, pluginAPIClient, p.config)
 	api.NewActionsHandler(p.handler.APIRouter, p.channelActionService, p.pluginAPI, p.permissions)
 	api.NewCategoryHandler(p.handler.APIRouter, pluginAPIClient, p.categoryService, p.playbookService, p.playbookRunService)
+	api.NewTabAppHandler(
+		p.handler,
+		p.playbookRunService,
+		pluginAPIClient,
+		p.config,
+		func() keyfunc.Keyfunc {
+			return p.tabAppJWTKeyFunc
+		},
+	)
 
 	isTestingEnabled := false
 	flag := p.API.GetConfig().ServiceSettings.EnableTesting
@@ -310,20 +350,12 @@ func (p *Plugin) UserHasJoinedChannel(c *plugin.Context, channelMember *model.Ch
 	if actor != nil && actor.Id != channelMember.UserId {
 		actorID = actor.Id
 	}
-	p.playbookRunService.UserHasJoinedChannel(channelMember.UserId, channelMember.ChannelId, actorID)
 	p.channelActionService.UserHasJoinedChannel(channelMember.UserId, channelMember.ChannelId, actorID)
 }
 
-func (p *Plugin) UserHasLeftChannel(c *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
-	actorID := ""
-	if actor != nil && actor.Id != channelMember.UserId {
-		actorID = actor.Id
-	}
-	p.playbookRunService.UserHasLeftChannel(channelMember.UserId, channelMember.ChannelId, actorID)
-}
-
 func (p *Plugin) MessageHasBeenPosted(c *plugin.Context, post *model.Post) {
-	p.channelActionService.MessageHasBeenPosted(c.SessionId, post)
+	p.channelActionService.MessageHasBeenPosted(post)
+	p.playbookRunService.MessageHasBeenPosted(post)
 }
 
 func (p *Plugin) newMetricsInstance() *metrics.Metrics {
@@ -342,7 +374,7 @@ func (p *Plugin) runMetricsServer() {
 	// Run server to expose metrics
 	go func() {
 		err := metricServer.Run()
-		if err != nil {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logrus.WithError(err).Error("Metrics server could not be started")
 		}
 	}()
@@ -403,4 +435,16 @@ func (p *Plugin) getErrorCounterHandler() func(next http.Handler) http.Handler {
 			}
 		})
 	}
+}
+
+func (p *Plugin) OnDeactivate() error {
+	p.cancelRunningLock.Lock()
+	if p.cancelRunning != nil {
+		p.cancelRunning()
+		p.cancelRunning = nil
+	}
+	p.cancelRunningLock.Unlock()
+
+	logrus.Info("Shutting down store..")
+	return p.pluginAPI.Store.Close()
 }

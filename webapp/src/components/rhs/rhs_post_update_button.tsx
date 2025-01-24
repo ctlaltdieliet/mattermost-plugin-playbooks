@@ -1,11 +1,11 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
 import {FormattedMessage} from 'react-intl';
 import styled, {css} from 'styled-components';
 
-import {PrimaryButton, TertiaryButton, DestructiveButton} from 'src/components/assets/buttons';
+import {DestructiveButton, PrimaryButton, TertiaryButton} from 'src/components/assets/buttons';
 
 interface Props {
     collapsed: boolean;

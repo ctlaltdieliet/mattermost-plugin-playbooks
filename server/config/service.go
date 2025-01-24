@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package config
 
 import (
@@ -7,9 +10,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 const npsPluginID = "com.mattermost.nps"
@@ -122,6 +125,7 @@ func (c *ServiceImpl) OnConfigurationChange() error {
 	}
 
 	configuration.BotUserID = c.configuration.BotUserID
+	configuration.TeamsTabAppBotUserID = c.configuration.TeamsTabAppBotUserID
 
 	c.setConfiguration(configuration)
 

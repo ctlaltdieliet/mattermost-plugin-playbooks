@@ -1,8 +1,11 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import {Duration, DurationObjectUnits, Settings} from 'luxon';
 
 import range from 'lodash/range';
 
-import {durationFromQuery, parse, Mode} from './datetime_parsing';
+import {Mode, durationFromQuery, parse} from './datetime_parsing';
 
 describe('durationFromQuery', () => {
     const locales = [
@@ -69,7 +72,7 @@ describe('durationFromQuery', () => {
         Settings.defaultLocale = locale;
 
         const duration = Duration.fromObject(durationObj);
-        const [long, short, narrow] = [...queries].map((query) => durationFromQuery(locale, query));
+        const [long/*, short, narrow*/] = [...queries].map((query) => durationFromQuery(locale, query));
 
         expect(long?.toMillis()).toBe(duration.toMillis());
 

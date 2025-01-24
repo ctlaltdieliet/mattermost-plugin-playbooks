@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import (
@@ -107,6 +110,8 @@ type CategoryService interface {
 
 	// IsItemFavorite returns whether item was favorited or not
 	IsItemFavorite(item CategoryItem, teamID, userID string) (bool, error)
+
+	AreItemsFavorites(items []CategoryItem, teamID, userID string) ([]bool, error)
 }
 
 type CategoryStore interface {

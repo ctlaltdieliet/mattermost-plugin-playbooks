@@ -1,11 +1,15 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import (
 	"database/sql"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 type categoryService struct {
@@ -137,4 +141,28 @@ func (c *categoryService) IsItemFavorite(item CategoryItem, teamID, userID strin
 		}
 	}
 	return found, nil
+}
+
+func (c *categoryService) AreItemsFavorites(items []CategoryItem, teamID, userID string) ([]bool, error) {
+	result := make([]bool, len(items))
+
+	favoriteCategory, err := c.store.GetFavoriteCategory(teamID, userID)
+	if err == sql.ErrNoRows {
+		return result, nil
+	} else if err != nil {
+		return result, errors.Wrap(err, "can't get favorite category")
+	}
+
+	categoryResult := make(map[CategoryItem]bool)
+	for _, favItem := range favoriteCategory.Items {
+		categoryResult[CategoryItem{
+			ItemID: favItem.ItemID,
+			Type:   favItem.Type,
+		}] = true
+	}
+
+	for i, item := range items {
+		result[i] = categoryResult[item]
+	}
+	return result, nil
 }

@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package api
 
 import (
@@ -7,10 +10,12 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/graph-gophers/dataloader/v7"
 	graphql "github.com/graph-gophers/graphql-go"
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	graphql_errors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -24,6 +29,7 @@ type GraphQLHandler struct {
 	config             config.Service
 	permissions        *app.PermissionsService
 	playbookStore      app.PlaybookStore
+	runStore           app.PlaybookRunStore
 	licenceChecker     app.LicenseChecker
 
 	schema *graphql.Schema
@@ -41,6 +47,7 @@ func NewGraphQLHandler(
 	configService config.Service,
 	permissions *app.PermissionsService,
 	playbookStore app.PlaybookStore,
+	runStore app.PlaybookRunStore,
 	licenceChecker app.LicenseChecker,
 ) *GraphQLHandler {
 	handler := &GraphQLHandler{
@@ -52,6 +59,7 @@ func NewGraphQLHandler(
 		config:             configService,
 		permissions:        permissions,
 		playbookStore:      playbookStore,
+		runStore:           runStore,
 		licenceChecker:     licenceChecker,
 	}
 
@@ -62,7 +70,7 @@ func NewGraphQLHandler(
 
 	if !configService.IsConfiguredForDevelopmentAndTesting() {
 		opts = append(opts,
-			graphql.MaxDepth(4),
+			graphql.MaxDepth(8),
 			graphql.DisableIntrospection(),
 		)
 	}
@@ -84,16 +92,22 @@ func NewGraphQLHandler(
 type ctxKey struct{}
 
 type GraphQLContext struct {
-	r                  *http.Request
-	playbookService    app.PlaybookService
-	playbookRunService app.PlaybookRunService
-	playbookStore      app.PlaybookStore
-	categoryService    app.CategoryService
-	pluginAPI          *pluginapi.Client
-	logger             logrus.FieldLogger
-	config             config.Service
-	permissions        *app.PermissionsService
-	licenceChecker     app.LicenseChecker
+	r                    *http.Request
+	playbookService      app.PlaybookService
+	playbookRunService   app.PlaybookRunService
+	playbookStore        app.PlaybookStore
+	runStore             app.PlaybookRunStore
+	categoryService      app.CategoryService
+	pluginAPI            *pluginapi.Client
+	logger               logrus.FieldLogger
+	config               config.Service
+	permissions          *app.PermissionsService
+	licenceChecker       app.LicenseChecker
+	favoritesLoader      *dataloader.Loader[favoriteInfo, bool]
+	playbooksLoader      *dataloader.Loader[playbookInfo, *app.Playbook]
+	statusPostsLoader    *dataloader.Loader[string, []app.StatusPost]
+	timelineEventsLoader *dataloader.Loader[string, []app.TimelineEvent]
+	runMetricsLoader     *dataloader.Loader[string, []app.RunMetricData]
 }
 
 // When moving over to the multi-product architecture this should be handled by the server.
@@ -118,17 +132,30 @@ func (h *GraphQLHandler) graphQL(c *Context, w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// dataloaders
+	favoritesLoader := dataloader.NewBatchedLoader(graphQLFavoritesLoader[bool], dataloader.WithBatchCapacity[favoriteInfo, bool](loaderBatchCapacity))
+	playbooksLoader := dataloader.NewBatchedLoader(graphQLPlaybooksLoader[*app.Playbook], dataloader.WithBatchCapacity[playbookInfo, *app.Playbook](loaderBatchCapacity))
+	statusPostsLoader := dataloader.NewBatchedLoader(graphQLStatusPostsLoader[[]app.StatusPost], dataloader.WithBatchCapacity[string, []app.StatusPost](loaderBatchCapacity))
+	timelineEventsLoader := dataloader.NewBatchedLoader(graphQLTimelineEventsLoader[[]app.TimelineEvent], dataloader.WithBatchCapacity[string, []app.TimelineEvent](loaderBatchCapacity))
+	runMetricsLoader := dataloader.NewBatchedLoader(graphQLRunMetricsLoader[[]app.RunMetricData], dataloader.WithBatchCapacity[string, []app.RunMetricData](loaderBatchCapacity))
+
 	graphQLContext := &GraphQLContext{
-		r:                  r,
-		playbookService:    h.playbookService,
-		playbookRunService: h.playbookRunService,
-		categoryService:    h.categoryService,
-		pluginAPI:          h.pluginAPI,
-		logger:             c.logger,
-		config:             h.config,
-		permissions:        h.permissions,
-		playbookStore:      h.playbookStore,
-		licenceChecker:     h.licenceChecker,
+		r:                    r,
+		playbookService:      h.playbookService,
+		playbookRunService:   h.playbookRunService,
+		categoryService:      h.categoryService,
+		pluginAPI:            h.pluginAPI,
+		logger:               c.logger,
+		config:               h.config,
+		permissions:          h.permissions,
+		playbookStore:        h.playbookStore,
+		runStore:             h.runStore,
+		licenceChecker:       h.licenceChecker,
+		favoritesLoader:      favoritesLoader,
+		playbooksLoader:      playbooksLoader,
+		statusPostsLoader:    statusPostsLoader,
+		timelineEventsLoader: timelineEventsLoader,
+		runMetricsLoader:     runMetricsLoader,
 	}
 
 	// Populate the context with required info.
@@ -142,14 +169,33 @@ func (h *GraphQLHandler) graphQL(c *Context, w http.ResponseWriter, r *http.Requ
 	)
 	r.Header.Set("X-GQL-Operation", params.OperationName)
 
-	for _, err := range response.Errors {
-		errLogger := c.logger.WithError(err).WithField("operation", params.OperationName)
+	if len(response.Errors) > 0 {
+		for i, err := range response.Errors {
+			errLogger := c.logger.WithError(err).WithField("operation", params.OperationName)
 
-		if errors.Is(err, app.ErrNoPermissions) {
-			errLogger.Warn("Warning executing request")
-		} else {
-			errLogger.Error("Error executing request")
+			if errors.Is(err, app.ErrNoPermissions) {
+				errLogger.Warn("Warning executing request")
+			} else if err.Rule == "FieldsOnCorrectType" {
+				errLogger.Warn("Query for non existent field")
+			} else {
+				errLogger.Error("Error executing request")
+			}
+
+			if i == 9 {
+				errLogger.Warnf("Too many errors, not logging %d more", len(response.Errors)-10)
+				break
+			}
 		}
+
+		response.Errors[0].Message = "Error while executing your request"
+		response.Errors[0].Locations = []graphql_errors.Location{{Line: 0, Column: 0}}
+		// remove all other errors
+		response.Errors = response.Errors[:1]
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			c.logger.WithError(err).Warn("Error while writing error response")
+		}
+		return
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -166,6 +212,8 @@ func getContext(ctx context.Context) (*GraphQLContext, error) {
 	return c, nil
 }
 
+// GraphiqlPage is the html base code for the graphiQL query runner
+//
 //go:embed graphqli.html
 var GraphiqlPage []byte
 

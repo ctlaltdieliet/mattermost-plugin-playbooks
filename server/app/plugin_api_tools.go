@@ -1,8 +1,12 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import (
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 var (

@@ -1,9 +1,11 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import {useApolloClient} from '@apollo/client';
 import React from 'react';
 import styled from 'styled-components';
 
-import {PlaybookLhsDocument} from 'src/graphql/generated_types';
-import PlaybooksSidebar from '../sidebar/playbooks_sidebar';
+import PlaybooksSidebar, {playbookLHSQueryDocument} from 'src/components/sidebar/playbooks_sidebar';
 
 const LHSContainer = styled.div`
     width: 240px;
@@ -26,7 +28,7 @@ export const useLHSRefresh = () => {
 
     const refreshLists = () => {
         apolloClient.refetchQueries({
-            include: [PlaybookLhsDocument],
+            include: [playbookLHSQueryDocument],
         });
     };
 

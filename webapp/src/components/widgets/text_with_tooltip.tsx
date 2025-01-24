@@ -1,4 +1,14 @@
-import React, {useState, useCallback, useRef, useEffect, ComponentProps} from 'react';
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
+import React, {
+    ComponentProps,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 
 import {debounce} from 'debounce';
 
@@ -15,7 +25,7 @@ const TextWithTooltip = (props: Props) => {
     const ref = useRef<HTMLAnchorElement|null>(null);
     const [showTooltip, setShowTooltip] = useState(false);
 
-    const resizeListener = useCallback(debounce(() => {
+    const resizeListener = useMemo(() => debounce(() => {
         if (ref?.current && ref?.current?.offsetWidth < ref?.current?.scrollWidth) {
             setShowTooltip(true);
         } else {

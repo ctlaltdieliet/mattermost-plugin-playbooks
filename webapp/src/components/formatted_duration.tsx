@@ -1,7 +1,12 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {DateTime, Duration, Interval, DurationUnit} from 'luxon';
+import {
+    DateTime,
+    Duration,
+    DurationUnit,
+    Interval,
+} from 'luxon';
 import React from 'react';
 
 import {useNow} from 'src/hooks';
@@ -22,31 +27,32 @@ interface DurationProps {
     truncate?: TruncateBehavior;
 }
 
-const label = (num: number, style: FormatStyle, narrow: string, singular: string, plural: string) => {
-    if (style === 'narrow') {
-        return narrow;
-    }
-
-    return num >= 2 ? plural : singular;
-};
-
 const UNITS: DurationUnit[] = ['years', 'days', 'hours', 'minutes'];
 
 export const formatDuration = (value: Duration, style: FormatStyle = 'narrow', truncate: TruncateBehavior = 'none') => {
-    if (value.as('seconds') < 60) {
-        return value
+    let localValue = value;
+
+    const isNegative = value.toMillis() < 0;
+    if (isNegative) {
+        localValue = value.negate();
+    }
+
+    if (localValue.as('seconds') < 60) {
+        const str = localValue
             .shiftTo('seconds')
             .mapUnits(Math.floor)
             .toHuman({unitDisplay: style});
+        return isNegative ? `-${str}` : str;
     }
 
-    const duration = value.shiftTo(...UNITS).normalize();
+    const duration = localValue.shiftTo(...UNITS).normalize();
     const formatUnits = truncate === 'truncate' ? [UNITS.find((unit) => duration.get(unit) > 0)!] : UNITS.filter((unit) => duration.get(unit) > 0);
 
-    return duration
+    const str = duration
         .shiftTo(...formatUnits)
         .mapUnits(Math.floor)
         .toHuman({unitDisplay: style});
+    return isNegative ? `-${str}` : str;
 };
 
 const FormattedDuration = ({from, to = 0, style, truncate}: DurationProps) => {

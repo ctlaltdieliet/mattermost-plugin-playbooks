@@ -1,9 +1,9 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import debounce from 'debounce';
-import {components, ControlProps} from 'react-select';
+import {ControlProps, components} from 'react-select';
 import styled from 'styled-components';
 import {useSelector} from 'react-redux';
 import {FormattedMessage, useIntl} from 'react-intl';
@@ -15,7 +15,7 @@ import {FetchPlaybookRunsParams, PlaybookRunStatus} from 'src/types/playbook_run
 import ProfileSelector, {Option as ProfileOption} from 'src/components/profile/profile_selector';
 import PlaybookSelector, {Option as PlaybookOption} from 'src/components/backstage/runs_list/playbook_selector';
 import {Option as TeamOption} from 'src/components/team/team_selector';
-import {fetchOwnersInTeam, clientFetchPlaybooks} from 'src/client';
+import {clientFetchPlaybooks, fetchOwnersInTeam} from 'src/client';
 import {Playbook} from 'src/types/playbook';
 import SearchInput from 'src/components/backstage/search_input';
 import CheckboxInput from 'src/components/backstage/runs_list/checkbox_input';
@@ -64,10 +64,6 @@ const OwnerControlComponent = (ownProps: ControlProps<ProfileOption, boolean>) =
     return controlComponent(ownProps, 'owners');
 };
 
-const TeamControlComponent = (ownProps: ControlProps<TeamOption, boolean>) => {
-    return controlComponent(ownProps, 'teams');
-};
-
 const PlaybookControlComponent = (ownProps: ControlProps<PlaybookOption, boolean>) => {
     return controlComponent(ownProps, 'playbooks');
 };
@@ -75,7 +71,6 @@ const PlaybookControlComponent = (ownProps: ControlProps<PlaybookOption, boolean
 const Filters = ({fetchParams, setFetchParams, fixedPlaybook, fixedFinished}: Props) => {
     const {formatMessage} = useIntl();
     const [profileSelectorToggle, setProfileSelectorToggle] = useState(false);
-    const [teamSelectorToggle, setTeamSelectorToggle] = useState(false);
     const [playbookSelectorToggle, setPlaybookSelectorToggle] = useState(false);
     const currentTeamId = useSelector(getCurrentTeamId);
 
@@ -86,15 +81,9 @@ const Filters = ({fetchParams, setFetchParams, fixedPlaybook, fixedFinished}: Pr
         });
     };
 
-    const setOwnerId = (userType?: string, user?: UserProfile) => {
+    const setOwnerId = (user?: UserProfile) => {
         setFetchParams((oldParams) => {
             return {...oldParams, owner_user_id: user?.id, page: 0};
-        });
-    };
-
-    const setTeamId = (teamId?: string) => {
-        setFetchParams((oldParams) => {
-            return {...oldParams, team_id: teamId, page: 0};
         });
     };
 
@@ -122,18 +111,13 @@ const Filters = ({fetchParams, setFetchParams, fixedPlaybook, fixedFinished}: Pr
         setProfileSelectorToggle(!profileSelectorToggle);
     };
 
-    const resetTeam = () => {
-        setTeamId();
-        setTeamSelectorToggle(!teamSelectorToggle);
-    };
-
     const resetPlaybook = () => {
         setPlaybookId();
         setPlaybookSelectorToggle(!playbookSelectorToggle);
     };
 
     async function fetchOwners() {
-        const owners = await fetchOwnersInTeam(fetchParams.team_id || '');
+        const owners = await fetchOwnersInTeam(fetchParams.team_id || currentTeamId);
         return owners.map((c) => {
             //@ts-ignore TODO Fix this strangeness
             return {...c, id: c.user_id} as UserProfile;
@@ -145,12 +129,17 @@ const Filters = ({fetchParams, setFetchParams, fixedPlaybook, fixedFinished}: Pr
         return playbooks ? playbooks.items : [] as Playbook[];
     }
 
+    const onSearch = useMemo(
+        () => debounce(setSearchTerm, searchDebounceDelayMilliseconds),
+        [setSearchTerm],
+    );
+
     return (
         <PlaybookRunListFilters>
             <SearchInput
                 testId={'search-filter'}
                 default={fetchParams.search_term}
-                onSearch={debounce(setSearchTerm, searchDebounceDelayMilliseconds)}
+                onSearch={onSearch}
                 placeholder={formatMessage({defaultMessage: 'Search by run name'})}
             />
             <CheckboxInput
@@ -179,8 +168,7 @@ const Filters = ({fetchParams, setFetchParams, fixedPlaybook, fixedFinished}: Pr
                     onCustomReset: resetOwner,
                 }}
                 controlledOpenToggle={profileSelectorToggle}
-                getUsers={fetchOwners}
-                getUsersInTeam={() => Promise.resolve([])}
+                getAllUsers={fetchOwners}
                 onSelectedChange={setOwnerId}
             />
             {!fixedPlaybook &&

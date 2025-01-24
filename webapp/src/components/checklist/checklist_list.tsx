@@ -1,18 +1,18 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState, useCallback} from 'react';
-import {FormattedMessage, useIntl} from 'react-intl';
+import React, {useCallback, useState} from 'react';
+import {useIntl} from 'react-intl';
 import {useDispatch} from 'react-redux';
 import styled from 'styled-components';
 import {
     DragDropContext,
-    DropResult,
-    Droppable,
-    DroppableProvided,
     Draggable,
     DraggableProvided,
     DraggableStateSnapshot,
+    DropResult,
+    Droppable,
+    DroppableProvided,
 } from 'react-beautiful-dnd';
 
 import classNames from 'classnames';
@@ -20,31 +20,19 @@ import classNames from 'classnames';
 import {FloatingPortal} from '@floating-ui/react-dom-interactions';
 
 import {PlaybookRun, PlaybookRunStatus} from 'src/types/playbook_run';
-import {
-    finishRun,
-    playbookRunUpdated,
-} from 'src/actions';
-import {
-    Checklist,
-    ChecklistItemState,
-    ChecklistItem,
-} from 'src/types/playbook';
-import {
-    clientMoveChecklist,
-    clientMoveChecklistItem,
-    clientAddChecklist,
-} from 'src/client';
-import {PrimaryButton, TertiaryButton} from 'src/components/assets/buttons';
-import TutorialTourTip, {useMeasurePunchouts, useShowTutorialStep} from 'src/components/tutorial/tutorial_tour_tip';
-import {RunDetailsTutorialSteps, TutorialTourCategories} from 'src/components/tutorial/tours';
+import {playbookRunUpdated} from 'src/actions';
+import {Checklist, ChecklistItem} from 'src/types/playbook';
+import {clientAddChecklist, clientMoveChecklist, clientMoveChecklistItem} from 'src/client';
 import {ButtonsFormat as ItemButtonsFormat} from 'src/components/checklist_item/checklist_item';
-import GiveFeedbackButton from 'src/components/give_feedback_button';
 
 import {FullPlaybook, Loaded, useUpdatePlaybook} from 'src/graphql/hooks';
 
 import {useProxyState} from 'src/hooks';
+import {PlaybookUpdates} from 'src/graphql/generated/graphql';
+import {getDistinctAssignees} from 'src/utils';
 
 import CollapsibleChecklist, {ChecklistInputComponent, TitleHelpTextWrapper} from './collapsible_checklist';
+
 import GenericChecklist, {generateKeys} from './generic_checklist';
 
 // disable all react-beautiful-dnd development warnings
@@ -54,82 +42,73 @@ window['__react-beautiful-dnd-disable-dev-warnings'] = true;
 interface Props {
     playbookRun?: PlaybookRun;
     playbook?: Loaded<FullPlaybook>;
-    enableFinishRun: boolean;
     isReadOnly: boolean;
     checklistsCollapseState: Record<number, boolean>;
     onChecklistCollapsedStateChange: (checklistIndex: number, state: boolean) => void;
     onEveryChecklistCollapsedStateChange: (state: Record<number, boolean>) => void;
     showItem?: (checklistItem: ChecklistItem, myId: string) => boolean;
     itemButtonsFormat?: ItemButtonsFormat;
+    onReadOnlyInteract?: () => void;
 }
-
-const RHSGiveFeedbackButton = styled(GiveFeedbackButton)`
-    && {
-        color: var(--center-channel-color-64);
-    }
-
-    &&:hover:not([disabled]) {
-        color: var(--center-channel-color-72);
-        background-color: var(--center-channel-color-08);
-    }
-`;
 
 const ChecklistList = ({
     playbookRun,
     playbook: inPlaybook,
-    enableFinishRun,
     isReadOnly,
     checklistsCollapseState,
     onChecklistCollapsedStateChange,
     onEveryChecklistCollapsedStateChange,
     showItem,
     itemButtonsFormat,
+    onReadOnlyInteract,
 }: Props) => {
     const dispatch = useDispatch();
     const {formatMessage} = useIntl();
-
-    const checklistsPunchout = useMeasurePunchouts(
-        ['pb-checklists-inner-container'],
-        [],
-        {y: -5, height: 10, x: -5, width: 10},
-    );
-    const showRunDetailsChecklistsStep = useShowTutorialStep(
-        RunDetailsTutorialSteps.Checklists,
-        TutorialTourCategories.RUN_DETAILS
-    );
     const [addingChecklist, setAddingChecklist] = useState(false);
     const [newChecklistName, setNewChecklistName] = useState('');
     const [isDragging, setIsDragging] = useState(false);
 
     const updatePlaybook = useUpdatePlaybook(inPlaybook?.id);
     const [playbook, setPlaybook] = useProxyState(inPlaybook, useCallback((updatedPlaybook) => {
-        const updated = updatedPlaybook?.checklists.map((cl) => {
-            return {
-                ...cl,
-                items: cl.items.map((ci) => {
-                    return {
-                        title: ci.title,
-                        description: ci.description,
-                        state: ci.state,
-                        stateModified: ci.state_modified || 0,
-                        assigneeID: ci.assignee_id || '',
-                        assigneeModified: ci.assignee_modified || 0,
-                        command: ci.command,
-                        commandLastRun: ci.command_last_run,
-                        dueDate: ci.due_date,
-                    };
-                }),
-            };
-        });
+        const updatedChecklists = updatedPlaybook?.checklists.map((cl) => ({
+            ...cl,
+            items: cl.items.map((ci) => ({
+                title: ci.title,
+                description: ci.description,
+                state: ci.state,
+                stateModified: ci.state_modified || 0,
+                assigneeID: ci.assignee_id || '',
+                assigneeModified: ci.assignee_modified || 0,
+                command: ci.command,
+                commandLastRun: ci.command_last_run,
+                dueDate: ci.due_date,
+                taskActions: ci.task_actions,
+            })),
+        }));
+        const updates: PlaybookUpdates = {
+            checklists: updatedChecklists,
+        };
 
-        updatePlaybook({checklists: updated});
+        if (updatedPlaybook) {
+            const preAssignees = getDistinctAssignees(updatedPlaybook.checklists);
+            if (preAssignees.length && !updatedPlaybook.invite_users_enabled) {
+                updates.inviteUsersEnabled = true;
+            }
+
+            // Append all assignees found in the updated checklists and clear duplicates
+            // Only update the invited users when new assignees were added
+            const invitedUsers = new Set([...updatedPlaybook.invited_user_ids, ...preAssignees]);
+            if (invitedUsers.size > updatedPlaybook.invited_user_ids.length) {
+                updates.invitedUserIDs = [...invitedUsers];
+            }
+        }
+
+        updatePlaybook(updates);
     }, [updatePlaybook]), 0);
     const checklists = playbookRun?.checklists || playbook?.checklists || [];
-    const FinishButton = allComplete(checklists) ? StyledPrimaryButton : StyledTertiaryButton;
-    const active = (playbookRun !== undefined) && (playbookRun.current_status === PlaybookRunStatus.InProgress);
     const finished = (playbookRun !== undefined) && (playbookRun.current_status === PlaybookRunStatus.Finished);
     const archived = playbook != null && playbook.delete_at !== 0 && !playbookRun;
-    const disabled = finished || archived || isReadOnly;
+    const readOnly = finished || archived || isReadOnly;
 
     if (!playbook && !playbookRun) {
         return null;
@@ -363,7 +342,7 @@ const ChecklistList = ({
                                                 index={checklistIndex}
                                                 collapsed={Boolean(checklistsCollapseState[checklistIndex])}
                                                 setCollapsed={(newState) => onChecklistCollapsedStateChange(checklistIndex, newState)}
-                                                disabled={disabled}
+                                                disabled={readOnly}
                                                 playbookRunID={playbookRun?.id}
                                                 onRenameChecklist={onRenameChecklist}
                                                 onDuplicateChecklist={onDuplicateChecklist}
@@ -378,13 +357,16 @@ const ChecklistList = ({
                                                 ) : undefined}
                                             >
                                                 <GenericChecklist
+                                                    id={playbookRun?.id || ''}
                                                     playbookRun={playbookRun}
-                                                    disabled={disabled}
+                                                    playbookId={playbook?.id || playbookRun?.playbook_id || ''}
+                                                    readOnly={readOnly}
                                                     checklist={checklist}
                                                     checklistIndex={checklistIndex}
                                                     onUpdateChecklist={(newChecklist: Checklist) => onUpdateChecklist(checklistIndex, newChecklist)}
                                                     showItem={showItem}
                                                     itemButtonsFormat={itemButtonsFormat}
+                                                    onReadOnlyInteract={onReadOnlyInteract}
                                                 />
                                             </CollapsibleChecklist>
                                         );
@@ -401,31 +383,8 @@ const ChecklistList = ({
                         </ChecklistsContainer>
                     )}
                 </Droppable>
-                {!disabled && addChecklist}
+                {!readOnly && addChecklist}
             </DragDropContext>
-            {
-                active && enableFinishRun && playbookRun &&
-                <FinishButton onClick={() => dispatch(finishRun(playbookRun?.team_id || ''))}>
-                    {formatMessage({defaultMessage: 'Finish run'})}
-                </FinishButton>
-            }
-            <RHSGiveFeedbackButton/>
-            {showRunDetailsChecklistsStep && (
-                <TutorialTourTip
-                    title={<FormattedMessage defaultMessage='Track progress and ownership'/>}
-                    screen={<FormattedMessage defaultMessage='Assign, check off, or skip tasks to ensure the team is clear on how to move toward the finish line together.'/>}
-                    tutorialCategory={TutorialTourCategories.RUN_DETAILS}
-                    step={RunDetailsTutorialSteps.Checklists}
-                    showOptOut={false}
-                    placement='left'
-                    pulsatingDotPlacement='top-start'
-                    pulsatingDotTranslate={{x: 0, y: 0}}
-                    width={352}
-                    autoTour={true}
-                    punchOut={checklistsPunchout}
-                    telemetryTag={`tutorial_tip_Playbook_Run_Details_${RunDetailsTutorialSteps.Checklists}_Checklists`}
-                />
-            )}
         </>
     );
 };
@@ -460,7 +419,7 @@ const NewChecklist = styled.div`
     background-color: rgba(var(--center-channel-color-rgb), 0.04);
     z-index: 1;
     position: sticky;
-    top: 48px; // height of rhs_checklists MainTitle
+    top: 0;
     border-radius: 4px 4px 0px 0px;
 
     display: flex;
@@ -485,30 +444,4 @@ const IconWrapper = styled.div`
     margin: 0;
 `;
 
-const StyledTertiaryButton = styled(TertiaryButton)`
-    display: inline-block;
-    margin: 12px 0;
-`;
-
-const StyledPrimaryButton = styled(PrimaryButton)`
-    display: inline-block;
-    margin: 12px 0;
-`;
-
 export default ChecklistList;
-
-const allComplete = (checklists: Checklist[]) => {
-    return notFinishedTasks(checklists) === 0;
-};
-
-const notFinishedTasks = (checklists: Checklist[]) => {
-    let count = 0;
-    for (const list of checklists) {
-        for (const item of list.items) {
-            if (item.state === ChecklistItemState.Open || item.state === ChecklistItemState.InProgress) {
-                count++;
-            }
-        }
-    }
-    return count;
-};

@@ -1,5 +1,15 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
+
+// Telemetry migration is in-progress
+// If you need to check the old
+// Event/Telemetry inventory available at https://docs.google.com/spreadsheets/d/15VBD2i-v7JX11H80beJj64wU8lqyMAm1UrDIjKjx63o/edit#gid=374475626
+
+export enum GeneralViewTarget {
+    TaskInbox = 'task_inbox',
+    ChannelsRHSHome = 'channels_rhs_home',
+    ChannelsRHSRunList = 'channels_rhs_runlist',
+}
 
 export enum PlaybookViewTarget {
     Usage = 'view_playbook_usage',
@@ -9,18 +19,7 @@ export enum PlaybookViewTarget {
 
 export enum PlaybookRunViewTarget {
 
-    // Old tracking approach
-
-    // @deprecated triggered at old run details page
-    Overview = 'view_run_overview',
-
-    // @deprecated triggered at old run details
-    Retrospective = 'view_run_retrospective',
-
-    ChannelsRHSDetails = 'view_run_channels_rhs_details',
-
-    // New tracking approach
-    // They're tracked as "page tracking", that's why they're not prefixed with "view_"
+    ChannelsRHSDetails = 'channels_rhs_rundetails',
 
     // StatusUpdate is triggered any time a StatusUpdatePost is shown in a
     // channel, so we track impressions
@@ -31,10 +30,20 @@ export enum PlaybookRunViewTarget {
 }
 
 export enum PlaybookRunEventTarget {
-    RequestUpdateClick = 'playbookrun_request_update_click',
-    GetInvolvedClick = 'playbookrun_get_involved_click',
-    GetInvolvedJoin = 'playbookrun_get_involved_join',
+    RequestUpdateClick = 'playbookrun_request_update',
+    Participate = 'playbookrun_participate',
+    Create = 'playbookrun_create',
+    Leave = 'playbookrun_leave',
+    Follow = 'playbookrun_follow',
+    Unfollow = 'playbookrun_unfollow',
+    UpdateActions = 'playbookrun_update_actions',
 }
 
-export type TelemetryViewTarget = PlaybookViewTarget | PlaybookRunViewTarget;
-export type TelemetryEventTarget = PlaybookRunEventTarget;
+export enum TaskActionsEventTarget {
+    UpdateActions = 'taskactions_updated',
+    Triggered = 'taskactions_triggered',
+    ActionExecuted = 'taskactions_action_executed',
+}
+
+export type TelemetryViewTarget = GeneralViewTarget | PlaybookViewTarget | PlaybookRunViewTarget;
+export type TelemetryEventTarget = PlaybookRunEventTarget | TaskActionsEventTarget;

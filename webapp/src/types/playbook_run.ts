@@ -1,8 +1,9 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import {TimelineEvent} from 'src/types/rhs';
-import {Checklist} from 'src/types/playbook';
+import {Checklist, ChecklistItem} from 'src/types/playbook';
+import {PlaybookRunType} from 'src/graphql/generated/graphql';
 
 export interface PlaybookRun {
     id: string;
@@ -42,6 +43,14 @@ export interface PlaybookRun {
     retrospective_enabled: boolean;
     participant_ids: string[];
     metrics_data: RunMetricData[];
+
+    /** Whether a channel member should be created when a new participant joins the run */
+    create_channel_member_on_new_participant: boolean;
+
+    /** Whether a channel member should be removed when an existing participant leaves the run */
+    remove_channel_member_on_removed_participant: boolean;
+
+    type: PlaybookRunType
 }
 
 export interface StatusPost {
@@ -82,10 +91,6 @@ export enum PlaybookRunStatus {
 export interface RunMetricData {
     metric_config_id: string;
     value: number | null;
-}
-
-function isString(arg: any): arg is string {
-    return Boolean(typeof arg === 'string');
 }
 
 export function playbookRunIsActive(playbookRun: PlaybookRun): boolean {
@@ -130,3 +135,16 @@ export const fetchParamsTimeEqual = (a: FetchPlaybookRunsParams, b: FetchPlayboo
         a.started_gte === b.started_gte &&
         a.started_lt === b.started_lt);
 };
+
+// PlaybookRunChecklistItem annotates ChecklistsItem with properties that associate it with the
+// containing playbook run.
+export interface PlaybookRunChecklistItem extends ChecklistItem {
+    item_num: number;
+    playbook_run_id: string;
+    playbook_run_name: string;
+    playbook_run_owner_user_id: string;
+    playbook_run_participant_user_ids: string[];
+    playbook_run_create_at: number;
+    checklist_title: string;
+    checklist_num: number;
+}

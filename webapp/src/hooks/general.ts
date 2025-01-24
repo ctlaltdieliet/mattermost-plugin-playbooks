@@ -1,69 +1,50 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import {
+    DependencyList,
     MutableRefObject,
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
-    useMemo,
-    DependencyList,
 } from 'react';
 import {useIntl} from 'react-intl';
 
 import {useDispatch, useSelector} from 'react-redux';
 import {DateTime} from 'luxon';
 
-import {getMyTeams, getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
+import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
 import {GlobalState} from '@mattermost/types/store';
-import {Team} from '@mattermost/types/teams';
-import {
-    getCurrentUserId,
-    getUser,
-    getProfilesInCurrentTeam,
-} from 'mattermost-redux/selectors/entities/users';
-import {
-    getCurrentChannelId,
-    getChannel as getChannelFromState,
-} from 'mattermost-redux/selectors/entities/channels';
-import {DispatchFunc} from 'mattermost-redux/types/actions';
-import {getProfilesByIds, getProfilesInChannel, getProfilesInTeam} from 'mattermost-redux/actions/users';
+import {getProfilesInCurrentTeam, getUser} from 'mattermost-redux/selectors/entities/users';
+import {getChannel as getChannelFromState} from 'mattermost-redux/selectors/entities/channels';
+import {getProfilesByIds, getProfilesInTeam} from 'mattermost-redux/actions/users';
 import {Client4} from 'mattermost-redux/client';
 import {getPost as getPostFromState} from 'mattermost-redux/selectors/entities/posts';
 import {UserProfile} from '@mattermost/types/users';
 import {getTeammateNameDisplaySetting} from 'mattermost-redux/selectors/entities/preferences';
 import {displayUsername} from 'mattermost-redux/utils/user_utils';
 import {ClientError} from '@mattermost/client';
-
 import {useHistory, useLocation} from 'react-router-dom';
 import qs from 'qs';
 import {haveITeamPermission} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/roles';
-
 import {useUpdateEffect} from 'react-use';
-
 import {debounce, isEqual} from 'lodash';
 
 import {FetchPlaybookRunsParams, PlaybookRun} from 'src/types/playbook_run';
 import {EmptyPlaybookStats} from 'src/types/stats';
 import {PROFILE_CHUNK_SIZE} from 'src/constants';
-import {getProfileSetForChannel, selectExperimentalFeatures, getRun} from 'src/selectors';
+import {getRun, noopSelector} from 'src/selectors';
 import {
-    fetchPlaybookRuns,
     clientFetchPlaybook,
-    fetchPlaybookRunStatusUpdates,
     fetchPlaybookRun,
-    fetchPlaybookStats,
     fetchPlaybookRunMetadata,
-    isFavoriteItem,
+    fetchPlaybookRunStatusUpdates,
+    fetchPlaybookRuns,
+    fetchPlaybookStats,
 } from 'src/client';
-import {CategoryItemType} from 'src/types/category';
-
-import {isCloud} from '../license';
-import {
-    globalSettings,
-    isCurrentUserAdmin,
-    noopSelector,
-} from '../selectors';
 import {resolve} from 'src/utils';
-import {useUpdateRun} from 'src/graphql/hooks';
 
 export type FetchMetadata = {
     isFetching: boolean;
@@ -180,25 +161,10 @@ export function useClientRect() {
     return [rect, ref] as const;
 }
 
-// useProfilesInCurrentChannel ensures at least the first page of members for the current channel
-// has been loaded into Redux.
-//
-// See useProfilesInChannel for additional context.
-export function useProfilesInCurrentChannel() {
-    const currentChannelId = useSelector(getCurrentChannelId);
-    const profilesInChannel = useProfilesInChannel(currentChannelId);
-
-    return profilesInChannel;
-}
-
-export function useCanCreatePlaybooksOnAnyTeam() {
-    const teams = useSelector(getMyTeams);
-    return useSelector((state: GlobalState) => (
-        teams.some((team: Team) => (
-            haveITeamPermission(state, team.id, 'playbook_public_create') ||
-            haveITeamPermission(state, team.id, 'playbook_private_create')
-        ))
-    ));
+export function useCanCreatePlaybooksInTeam(teamId: string) {
+    return useSelector(
+        (state: GlobalState) => haveITeamPermission(state, teamId, 'playbook_public_create') || haveITeamPermission(state, teamId, 'playbook_private_create')
+    );
 }
 
 // lockProfilesInTeamFetch and lockProfilesInChannelFetch prevent concurrently fetching profiles
@@ -250,76 +216,6 @@ export function useProfilesInTeam() {
     }, [currentTeamId, profilesInTeam]);
 
     return profilesInTeam;
-}
-
-export function useCanCreatePlaybooks() {
-    const settings = useSelector(globalSettings);
-    const currentUserID = useSelector(getCurrentUserId);
-
-    // This is really a loading state so just assume yes
-    if (!settings) {
-        return true;
-    }
-
-    // No restrictions if length is zero
-    if (settings.playbook_creators_user_ids.length === 0) {
-        return true;
-    }
-
-    return settings.playbook_creators_user_ids.includes(currentUserID);
-}
-
-export function useCanRestrictPlaybookCreation() {
-    const settings = useSelector(globalSettings);
-    const isAdmin = useSelector(isCurrentUserAdmin);
-    const currentUserID = useSelector(getCurrentUserId);
-
-    // This is really a loading state so just assume no.
-    if (!settings) {
-        return false;
-    }
-
-    // No restrictions if user is a system administrator.
-    if (isAdmin) {
-        return true;
-    }
-
-    return settings.playbook_creators_user_ids.includes(currentUserID);
-}
-
-export function useExperimentalFeaturesEnabled() {
-    return useSelector(selectExperimentalFeatures);
-}
-
-// useProfilesInChannel ensures at least the first page of members for the given channel has been
-// loaded into Redux.
-//
-// See useProfilesInTeam for additional detail regarding semantics.
-export function useProfilesInChannel(channelId: string) {
-    const dispatch = useDispatch() as DispatchFunc;
-    const profilesInChannel = useSelector((state) =>
-        getProfileSetForChannel(state as GlobalState, channelId),
-    );
-
-    useEffect(() => {
-        if (profilesInChannel.length > 0) {
-            // As soon as we successfully fetch a channel's profiles, clear the bit that prevents
-            // concurrent fetches. We won't try again since we shouldn't forget these profiles,
-            // but we also don't want to unexpectedly block this forever.
-            lockProfilesInChannelFetch.delete(channelId);
-            return;
-        }
-
-        // Avoid issuing multiple concurrent fetches for this channel.
-        if (lockProfilesInChannelFetch.has(channelId)) {
-            return;
-        }
-        lockProfilesInChannelFetch.add(channelId);
-
-        dispatch(getProfilesInChannel(channelId, 0, PROFILE_CHUNK_SIZE));
-    }, [channelId]);
-
-    return profilesInChannel;
 }
 
 /**
@@ -455,18 +351,17 @@ export function useEnsureProfiles(userIds: string[]) {
     }, [userIds]);
 }
 
-export function useOpenCloudModal() {
-    const dispatch = useDispatch();
-    const isServerCloud = useSelector(isCloud);
+export function useOpenContactSales() {
+    return () => {
+        window.open('https://mattermost.com/contact-sales');
+    };
+}
 
-    if (!isServerCloud) {
-        return () => {
-            /*do nothing*/
-        };
-    }
+export function useOpenStartTrialFormModal() {
+    const dispatch = useDispatch();
 
     // @ts-ignore
-    if (!window.WebappUtils?.modals?.openModal || !window.WebappUtils?.modals?.ModalIdentifiers?.CLOUD_PURCHASE || !window.Components?.PurchaseModal) {
+    if (!window.WebappUtils?.modals?.openModal || !window.WebappUtils?.modals?.ModalIdentifiers?.START_TRIAL_FORM_MODAL || !window.Components?.StartTrialFormModal) {
         // eslint-disable-next-line no-console
         console.error('unable to open cloud modal');
 
@@ -479,15 +374,16 @@ export function useOpenCloudModal() {
     const {openModal, ModalIdentifiers} = window.WebappUtils.modals;
 
     // @ts-ignore
-    const PurchaseModal = window.Components.PurchaseModal;
+    const TrialModal = window.Components.StartTrialFormModal;
 
-    return () => {
+    return (page?: string, onClose?: () => void) => {
         dispatch(
             openModal({
-                modalId: ModalIdentifiers.CLOUD_PURCHASE,
-                dialogType: PurchaseModal,
+                modalId: ModalIdentifiers.START_TRIAL_FORM_MODAL,
+                dialogType: TrialModal,
                 dialogProps: {
-                    callerCTA: 'playbooks',
+                    page,
+                    onClose,
                 },
             }),
         );
@@ -684,7 +580,7 @@ export const useProxyState = <T>(
         setValue(prop);
     }, [prop]);
 
-    const onChangeDebounced = useCallback(debounce((v) => {
+    const onChangeDebounced = useMemo(() => debounce((v) => {
         check.current = v; // send check
         onChange(v);
     }, wait), [wait, onChange]);
@@ -703,28 +599,6 @@ export const useProxyState = <T>(
 export const useExportLogAvailable = () => {
     //@ts-ignore plugins state is a thing
     return useSelector<GlobalState, boolean>((state) => Boolean(state.plugins?.plugins?.['com.mattermost.plugin-channel-export']));
-};
-
-export const useFavoriteRun = (teamID: string, runID: string): [boolean, () => void] => {
-    const [isFavoriteRun, setIsFavoriteRun] = useState(false);
-    const updateRun = useUpdateRun(runID);
-
-    useEffect(() => {
-        isFavoriteItem(teamID, runID, CategoryItemType.RunItemType)
-            .then(setIsFavoriteRun)
-            .catch(() => setIsFavoriteRun(false));
-    }, [teamID, runID]);
-
-    const toggleFavorite = () => {
-        if (isFavoriteRun) {
-            updateRun({isFavorite: false});
-            setIsFavoriteRun(false);
-            return;
-        }
-        updateRun({isFavorite: true});
-        setIsFavoriteRun(true);
-    };
-    return [isFavoriteRun, toggleFavorite];
 };
 
 export enum ReservedCategory {

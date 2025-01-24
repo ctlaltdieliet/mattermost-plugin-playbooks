@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 package app
@@ -6,7 +6,8 @@ package app
 // DigestNotificationSettings is a separate type to make it easy to marshal/unmarshal it into JSON
 // in the sqlstore. It is set by the user with the `/playbook settings digest [on/off]` slash command.
 type DigestNotificationSettings struct {
-	DisableDailyDigest bool `json:"disable_daily_digest"`
+	DisableDailyDigest  bool `json:"disable_daily_digest"`
+	DisableWeeklyDigest bool `json:"disable_weekly_digest"`
 }
 
 type UserInfo struct {

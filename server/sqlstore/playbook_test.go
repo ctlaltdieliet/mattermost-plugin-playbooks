@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package sqlstore
 
 import (
@@ -6,18 +9,19 @@ import (
 	"strconv"
 	"testing"
 
-	"gopkg.in/guregu/null.v4"
-
 	"github.com/golang/mock/gomock"
 	"github.com/jmoiron/sqlx"
-	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
-	mock_sqlstore "github.com/mattermost/mattermost-plugin-playbooks/server/sqlstore/mocks"
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/guregu/null.v4"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-playbooks/server/app"
+	mock_sqlstore "github.com/mattermost/mattermost-plugin-playbooks/server/sqlstore/mocks"
 )
 
-func membersFromIds(ids []string) []app.PlaybookMember {
+func membersFromIDs(ids []string) []app.PlaybookMember {
 	members := []app.PlaybookMember{}
 	for _, id := range ids {
 		members = append(members, app.PlaybookMember{
@@ -224,10 +228,8 @@ func TestGetPlaybook(t *testing.T) {
 		})
 
 		t.Run(driverName+" - create but retrieve non-existing playbook", func(t *testing.T) {
-			id, err := playbookStore.Create(pb02)
+			_, err := playbookStore.Create(pb02)
 			require.NoError(t, err)
-			expected := pb02.Clone()
-			expected.ID = id
 
 			actual, err := playbookStore.Get("nonexisting")
 			cleanMetricsIDs(actual.Metrics)
@@ -775,10 +777,10 @@ func TestGetPlaybooksForTeam(t *testing.T) {
 				PerPage: 1000,
 			},
 			expected: app.GetPlaybooksResults{
-				TotalCount: 2,
-				PageCount:  1,
+				TotalCount: 0,
+				PageCount:  0,
 				HasMore:    false,
-				Items:      []app.Playbook{pb07, pb09},
+				Items:      []app.Playbook{},
 			},
 			expectedErr: nil,
 		},
@@ -815,10 +817,10 @@ func TestGetPlaybooksForTeam(t *testing.T) {
 				PerPage: 1000,
 			},
 			expected: app.GetPlaybooksResults{
-				TotalCount: 2,
-				PageCount:  1,
+				TotalCount: 0,
+				PageCount:  0,
 				HasMore:    false,
-				Items:      []app.Playbook{pb08, pb09},
+				Items:      []app.Playbook{},
 			},
 			expectedErr: nil,
 		},
@@ -881,7 +883,7 @@ func TestGetPlaybooksForTeam(t *testing.T) {
 		playbookStore := setupPlaybookStore(t, db)
 
 		t.Run(driverName+" - zero playbooks", func(t *testing.T) {
-			result, err := playbookStore.GetPlaybooks()
+			result, err := playbookStore.GetActivePlaybooks()
 			require.NoError(t, err)
 			require.ElementsMatch(t, []app.Playbook{}, result)
 		})
@@ -1069,7 +1071,7 @@ func TestUpdatePlaybook(t *testing.T) {
 				playbook: NewPBBuilder().WithChecklists([]int{1, 2}).
 					WithMembers([]userInfo{jon, andrew}).ToPlaybook(),
 				update: func(old app.Playbook) app.Playbook {
-					old.Members = membersFromIds([]string{andrew.ID})
+					old.Members = membersFromIDs([]string{andrew.ID})
 					return old
 				},
 				expectedErr: nil,
@@ -1081,7 +1083,7 @@ func TestUpdatePlaybook(t *testing.T) {
 				update: func(old app.Playbook) app.Playbook {
 					oldMembers := []string{matt.ID, bill.ID, alice.ID, jen.ID}
 					sort.Strings(oldMembers)
-					old.Members = membersFromIds(oldMembers)
+					old.Members = membersFromIDs(oldMembers)
 					return old
 				},
 				expectedErr: nil,
@@ -1093,7 +1095,7 @@ func TestUpdatePlaybook(t *testing.T) {
 				update: func(old app.Playbook) app.Playbook {
 					oldMembers := []string{jon.ID, andrew.ID, bob.ID, alice.ID}
 					sort.Strings(oldMembers)
-					old.Members = membersFromIds(oldMembers)
+					old.Members = membersFromIDs(oldMembers)
 					return old
 				},
 				expectedErr: nil,
@@ -1104,7 +1106,7 @@ func TestUpdatePlaybook(t *testing.T) {
 				update: func(old app.Playbook) app.Playbook {
 					oldMembers := []string{alice.ID, jen.ID}
 					sort.Strings(oldMembers)
-					old.Members = membersFromIds(oldMembers)
+					old.Members = membersFromIDs(oldMembers)
 					return old
 				},
 				expectedErr: nil,
@@ -1345,7 +1347,7 @@ func TestGetPlaybooksForKeywords(t *testing.T) {
 		playbookStore := setupPlaybookStore(t, db)
 
 		t.Run("zero playbooks", func(t *testing.T) {
-			result, err := playbookStore.GetPlaybooks()
+			result, err := playbookStore.GetActivePlaybooks()
 			require.NoError(t, err)
 			require.ElementsMatch(t, []app.Playbook{}, result)
 		})
@@ -1422,7 +1424,7 @@ func TestGetTimeLastUpdated(t *testing.T) {
 		playbookStore := setupPlaybookStore(t, db)
 
 		t.Run("zero playbooks", func(t *testing.T) {
-			result, err := playbookStore.GetPlaybooks()
+			result, err := playbookStore.GetActivePlaybooks()
 			require.NoError(t, err)
 			require.ElementsMatch(t, []app.Playbook{}, result)
 
@@ -1541,7 +1543,7 @@ func TestGetPlaybookIDsForUser(t *testing.T) {
 		playbookStore := setupPlaybookStore(t, db)
 
 		t.Run("zero playbooks", func(t *testing.T) {
-			result, err := playbookStore.GetPlaybooks()
+			result, err := playbookStore.GetActivePlaybooks()
 			require.NoError(t, err)
 			require.ElementsMatch(t, []app.Playbook{}, result)
 		})
@@ -1834,7 +1836,7 @@ func (p *PlaybookBuilder) WithMembers(members []userInfo) *PlaybookBuilder {
 	}
 	sort.Strings(memberIDs)
 
-	p.Members = membersFromIds(memberIDs)
+	p.Members = membersFromIDs(memberIDs)
 
 	if len(members) == 0 {
 		p.Public = true
@@ -1986,7 +1988,7 @@ func TestGetTopPlaybooks(t *testing.T) {
 
 		t.Run(driverName+" - get top team playbooks", func(t *testing.T) {
 			// for jon
-			topPlaybooks, err := playbookStore.GetTopPlaybooksForTeam(team1id, jon.ID, &model.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
+			topPlaybooks, err := playbookStore.GetTopPlaybooksForTeam(team1id, jon.ID, &app.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
 			require.NoError(t, err)
 			// should get top playbooks as pb01.ID, and pb04.ID
 			// implicitly means there's no playbooks from other team
@@ -1998,7 +2000,7 @@ func TestGetTopPlaybooks(t *testing.T) {
 			require.Equal(t, topPlaybooks.Items[1].PlaybookID, playbooks[3].ID)
 
 			// for matt
-			topPlaybooks, err = playbookStore.GetTopPlaybooksForTeam(team1id, matt.ID, &model.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
+			topPlaybooks, err = playbookStore.GetTopPlaybooksForTeam(team1id, matt.ID, &app.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
 			require.NoError(t, err)
 			// should get top playbooks as pb01.ID, pb02.ID and pb04.ID
 			// implicitly means there's no playbooks from other team
@@ -2013,7 +2015,7 @@ func TestGetTopPlaybooks(t *testing.T) {
 
 		t.Run(driverName+" - get top user playbooks", func(t *testing.T) {
 			// for jon
-			topPlaybooks, err := playbookStore.GetTopPlaybooksForUser(team1id, jon.ID, &model.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
+			topPlaybooks, err := playbookStore.GetTopPlaybooksForUser(team1id, jon.ID, &app.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
 			require.NoError(t, err)
 			// should get top playbooks as pb01.ID, and pb04.ID
 			// implicitly means there's no playbooks from other team
@@ -2023,7 +2025,7 @@ func TestGetTopPlaybooks(t *testing.T) {
 			require.Equal(t, topPlaybooks.Items[0].PlaybookID, playbooks[0].ID)
 
 			// for team 2
-			topPlaybooks, err = playbookStore.GetTopPlaybooksForUser(team2id, jon.ID, &model.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
+			topPlaybooks, err = playbookStore.GetTopPlaybooksForUser(team2id, jon.ID, &app.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
 			require.NoError(t, err)
 			// should get top playbooks as pb01.ID, and pb04.ID
 			// implicitly means there's no playbooks from other team
@@ -2033,7 +2035,7 @@ func TestGetTopPlaybooks(t *testing.T) {
 			require.Equal(t, topPlaybooks.Items[0].PlaybookID, playbooks[2].ID)
 
 			// for matt
-			topPlaybooks, err = playbookStore.GetTopPlaybooksForUser(team1id, matt.ID, &model.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
+			topPlaybooks, err = playbookStore.GetTopPlaybooksForUser(team1id, matt.ID, &app.InsightsOpts{StartUnixMilli: 0, Page: 0, PerPage: 100})
 			require.NoError(t, err)
 			// should get top playbooks as pb01.ID, and pb04.ID
 			// implicitly means there's no playbooks from other team

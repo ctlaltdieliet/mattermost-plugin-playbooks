@@ -1,26 +1,14 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import {generateId} from 'mattermost-redux/utils/helpers';
+import {getCurrentChannelId} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/common';
 
 import {Store} from 'src/types/store';
+import {promptUpdateStatus, setClientId, toggleRHS} from 'src/actions';
+import {inPlaybookRunChannel, isPlaybookRunRHSOpen} from 'src/selectors';
 
-import {
-    toggleRHS,
-    setClientId,
-    setRHSViewingList,
-    setRHSViewingPlaybookRun,
-    promptUpdateStatus,
-} from 'src/actions';
-
-import {
-    inPlaybookRunChannel,
-    isPlaybookRunRHSOpen,
-    currentRHSState,
-    currentPlaybookRun,
-} from 'src/selectors';
-
-import {RHSState} from 'src/types/rhs';
+import {fetchPlaybookRunsForChannelByUser} from './client';
 
 type SlashCommandObj = {message?: string; args?: string[];} | {error: string;} | {};
 
@@ -37,11 +25,42 @@ export function makeSlashCommandHook(store: Store) {
         }
 
         if (message?.startsWith('/playbook update') && inPlaybookRunChannel(state)) {
-            const currentRun = currentPlaybookRun(state);
-            if (currentRun) {
+            const currentChannel = getCurrentChannelId(state);
+            if (currentChannel) {
+                const playbookRuns = await fetchPlaybookRunsForChannelByUser(currentChannel);
                 const clientId = generateId();
                 store.dispatch(setClientId(clientId));
-                store.dispatch(promptUpdateStatus(currentRun.team_id, currentRun.id, currentRun.channel_id));
+
+                const runNumber = message.substring(16);
+
+                // no runs, propagate so server could handle this command and post ephemeral message
+                if (!playbookRuns || playbookRuns?.length === 0) {
+                    return {message: inMessage, args};
+                }
+
+                const multipleRuns = playbookRuns?.length > 1;
+
+                // multiple runs, mussing run number
+                if (multipleRuns && runNumber === '') {
+                    return {message: inMessage, args};
+                }
+
+                let run = 0;
+                if (multipleRuns) {
+                    run = parseInt(runNumber, 10);
+
+                    // run number parsing error
+                    if (isNaN(run)) {
+                        return {message: inMessage, args};
+                    }
+
+                    // invalid run number
+                    if (run < 0 || run >= playbookRuns.length) {
+                        return {message: inMessage, args};
+                    }
+                }
+
+                store.dispatch(promptUpdateStatus(playbookRuns[run].team_id, playbookRuns[run].id, currentChannel));
                 return {};
             }
         }
@@ -50,23 +69,6 @@ export function makeSlashCommandHook(store: Store) {
             if (inPlaybookRunChannel(state) && !isPlaybookRunRHSOpen(state)) {
                 //@ts-ignore thunk
                 store.dispatch(toggleRHS());
-            }
-
-            if (inPlaybookRunChannel(state) && currentRHSState(state) !== RHSState.ViewingPlaybookRun) {
-                store.dispatch(setRHSViewingPlaybookRun());
-            }
-
-            return {message, args};
-        }
-
-        if (message?.startsWith('/playbook list')) {
-            if (!isPlaybookRunRHSOpen(state)) {
-                //@ts-ignore thunk
-                store.dispatch(toggleRHS());
-            }
-
-            if (inPlaybookRunChannel(state) && currentRHSState(state) !== RHSState.ViewingList) {
-                store.dispatch(setRHSViewingList());
             }
 
             return {message, args};

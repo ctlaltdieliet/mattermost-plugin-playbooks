@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import React from 'react';
 import {FormattedMessage, useIntl} from 'react-intl';
 import {useSelector} from 'react-redux';
@@ -16,7 +19,12 @@ import {navigateToPluginUrl} from 'src/browser_routing';
 
 import {noRetrospective} from 'src/client';
 
-import {CustomPostContainer, CustomPostContent, CustomPostHeader, CustomPostButtonRow} from 'src/components/custom_post_styles';
+import {
+    CustomPostButtonRow,
+    CustomPostContainer,
+    CustomPostContent,
+    CustomPostHeader,
+} from 'src/components/custom_post_styles';
 
 import {Timestamp} from 'src/webapp_globals';
 

@@ -1,14 +1,15 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
 import styled, {css} from 'styled-components';
 import {useIntl} from 'react-intl';
 
-import MarkdownTextbox from '../markdown_textbox';
+import MarkdownTextbox from 'src/components/markdown_textbox';
 
 import {useUniqueId} from 'src/utils';
-import FormattedMarkdown from '../formatted_markdown';
+
+import FormattedMarkdown from 'src/components/formatted_markdown';
 
 import {CollapsibleChecklistItemDescription} from './inputs';
 

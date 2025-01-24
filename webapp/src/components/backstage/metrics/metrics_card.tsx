@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -22,8 +22,8 @@ interface Props {
 const MetricsCard = ({playbookMetrics, playbookStats, index}: Props) => {
     const {formatMessage} = useIntl();
     const stats = makeCardStats(playbookMetrics, playbookStats, index);
-    const transformFn = playbookMetrics[index].type === MetricType.Duration ? (val: number) => formatDuration(Duration.fromMillis(val)) : (val: number) => val;
-    const valueTransformFn = playbookMetrics[index].type === MetricType.Duration ? (val: number) => formatDuration(Duration.fromMillis(val), 'narrow', 'truncate') : (val: number) => val;
+    const transformFn = playbookMetrics[index].type === MetricType.MetricDuration ? (val: number) => formatDuration(Duration.fromMillis(val)) : (val: number) => val;
+    const valueTransformFn = playbookMetrics[index].type === MetricType.MetricDuration ? (val: number) => formatDuration(Duration.fromMillis(val), 'narrow', 'truncate') : (val: number) => val;
 
     const style = getComputedStyle(document.body);
     const buttonBg = style.getPropertyValue('--button-bg');
@@ -55,11 +55,13 @@ const MetricsCard = ({playbookMetrics, playbookStats, index}: Props) => {
                 <SummaryCardInner>
                     <Cell>
                         <Title>{formatMessage({defaultMessage: 'Average value'})}</Title>
+                        {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                         <Value>{stats.average === null ? '-' : transformFn(stats.average)}</Value>
                     </Cell>
                     <Cell>
                         <Title>{formatMessage({defaultMessage: '10-run average value'})}</Title>
                         <Row>
+                            {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                             <Value>{stats.rolling_average === null ? '-' : transformFn(stats.rolling_average)}</Value>
                             {percentageChange(stats.rolling_average_change)}
                         </Row>
@@ -67,9 +69,11 @@ const MetricsCard = ({playbookMetrics, playbookStats, index}: Props) => {
                     <Cell>
                         <Title>{formatMessage({defaultMessage: 'Value range'})}</Title>
                         <Value>
+                            {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                             {stats.value_range[0] === null ? '-' : valueTransformFn(stats.value_range[0])}
                             {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                             <ValueTo>{' ' + formatMessage({defaultMessage: 'to'}) + ' '}</ValueTo>
+                            {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                             {stats.value_range[1] === null ? '-' : valueTransformFn(stats.value_range[1])}
                         </Value>
                     </Cell>

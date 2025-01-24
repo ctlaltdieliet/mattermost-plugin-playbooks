@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package client
 
 import (
@@ -19,7 +22,7 @@ type PlaybookSiteStats struct {
 // Get the stats that should be displayed in system console.
 func (s *StatsService) GetSiteStats(ctx context.Context) (*PlaybookSiteStats, error) {
 	statsURL := "stats/site"
-	req, err := s.client.newRequest(http.MethodGet, statsURL, nil)
+	req, err := s.client.newAPIRequest(http.MethodGet, statsURL, nil)
 	if err != nil {
 		return nil, err
 	}

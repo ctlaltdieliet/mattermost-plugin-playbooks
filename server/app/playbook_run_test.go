@@ -1,18 +1,31 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestPlaybookRun_MarshalJSON(t *testing.T) {
-	testPlaybookRun := &PlaybookRun{}
-	result, err := json.Marshal(testPlaybookRun)
-	require.NoError(t, err)
-	require.NotContains(t, string(result), "null", "update MarshalJSON to initialize nil slices")
+	t.Run("marshal pointer", func(t *testing.T) {
+		testPlaybookRun := &PlaybookRun{}
+		result, err := json.Marshal(testPlaybookRun)
+		require.NoError(t, err)
+		require.NotContains(t, string(result), "null", "update MarshalJSON to initialize nil slices")
+	})
+
+	t.Run("marshal value", func(t *testing.T) {
+		testPlaybookRun := PlaybookRun{}
+		result, err := json.Marshal(testPlaybookRun)
+		require.NoError(t, err)
+		require.NotContains(t, string(result), "null", "update MarshalJSON to initialize nil slices")
+	})
 }
 
 func TestPlaybookRunFilterOptions_Clone(t *testing.T) {
@@ -47,6 +60,7 @@ func TestPlaybookRunFilterOptions_Clone(t *testing.T) {
 	err = json.Unmarshal(marshalledOptions, &unmarshalledOptions)
 	require.NoError(t, err)
 	require.Equal(t, options, unmarshalledOptions)
+	require.NotEqual(t, clone, unmarshalledOptions)
 }
 
 func TestPlaybookRunFilterOptions_Validate(t *testing.T) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 package app
@@ -8,15 +8,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 const RetrospectivePrefix = "retro_"
 
 // HandleReminder is the handler for all reminder events.
-func (s *PlaybookRunServiceImpl) HandleReminder(key string) {
+func (s *PlaybookRunServiceImpl) HandleReminder(key string, _ any) {
 	if strings.HasPrefix(key, RetrospectivePrefix) {
 		s.handleReminderToFillRetro(strings.TrimPrefix(key, RetrospectivePrefix))
 	} else {
@@ -90,16 +91,17 @@ func (s *PlaybookRunServiceImpl) handleStatusUpdateReminder(playbookRunID string
 	}
 
 	post := &model.Post{
-		Message:   fmt.Sprintf("@%s, please provide a status update.", owner.Username),
+		Message:   fmt.Sprintf("@%s, please provide a status update for [%s](%s).", owner.Username, playbookRunToModify.Name, GetRunDetailsRelativeURL(playbookRunID)),
 		ChannelId: playbookRunToModify.ChannelID,
 		Type:      "custom_update_status",
-		Props: map[string]interface{}{
+		Props: map[string]any{
 			"targetUsername": owner.Username,
+			"playbookRunId":  playbookRunToModify.ID,
 		},
 	}
 	model.ParseSlackAttachment(post, attachments)
 
-	if err := s.poster.PostMessageToThread("", post); err != nil {
+	if err = s.poster.PostMessageToThread("", post); err != nil {
 		logger.WithError(err).Errorf("HandleReminder error posting reminder message")
 		return
 	}
@@ -116,7 +118,7 @@ func (s *PlaybookRunServiceImpl) handleStatusUpdateReminder(playbookRunID string
 	}
 
 	playbookRunToModify.ReminderPostID = post.Id
-	if err = s.store.UpdatePlaybookRun(playbookRunToModify); err != nil {
+	if _, err = s.store.UpdatePlaybookRun(playbookRunToModify); err != nil {
 		logger.WithError(err).Error("error updating with reminder post id")
 	}
 }
@@ -141,7 +143,7 @@ func (s *PlaybookRunServiceImpl) buildOverdueStatusUpdateMessage(playbookRun *Pl
 // SetReminder sets a reminder. After timeInMinutes in the future, the owner will be
 // reminded to update the playbook run's status.
 func (s *PlaybookRunServiceImpl) SetReminder(playbookRunID string, fromNow time.Duration) error {
-	if _, err := s.scheduler.ScheduleOnce(playbookRunID, time.Now().Add(fromNow)); err != nil {
+	if _, err := s.scheduler.ScheduleOnce(playbookRunID, time.Now().Add(fromNow), nil); err != nil {
 		return errors.Wrap(err, "unable to schedule reminder")
 	}
 
@@ -161,11 +163,13 @@ func (s *PlaybookRunServiceImpl) resetReminderTimer(playbookRunID string) error 
 	}
 
 	playbookRunToModify.PreviousReminder = 0
-	if err = s.store.UpdatePlaybookRun(playbookRunToModify); err != nil {
+
+	playbookRunToModify, err = s.store.UpdatePlaybookRun(playbookRunToModify)
+	if err != nil {
 		return errors.Wrapf(err, "failed to update playbook run after resetting reminder timer")
 	}
 
-	s.poster.PublishWebsocketEventToChannel(playbookRunUpdatedWSEvent, playbookRunToModify, playbookRunToModify.ChannelID)
+	s.sendPlaybookRunUpdatedWS(playbookRunToModify.ID, withPlaybookRun(playbookRunToModify))
 
 	return nil
 }
@@ -215,7 +219,9 @@ func (s *PlaybookRunServiceImpl) SetNewReminder(playbookRunID string, newReminde
 
 	playbookRunToModify.PreviousReminder = newReminder
 	playbookRunToModify.LastStatusUpdateAt = model.GetMillis()
-	if err = s.store.UpdatePlaybookRun(playbookRunToModify); err != nil {
+
+	playbookRunToModify, err = s.store.UpdatePlaybookRun(playbookRunToModify)
+	if err != nil {
 		return errors.Wrapf(err, "failed to update playbook run after resetting reminder timer")
 	}
 
@@ -225,7 +231,7 @@ func (s *PlaybookRunServiceImpl) SetNewReminder(playbookRunID string, newReminde
 		}
 	}
 
-	s.poster.PublishWebsocketEventToChannel(playbookRunUpdatedWSEvent, playbookRunToModify, playbookRunToModify.ChannelID)
+	s.sendPlaybookRunUpdatedWS(playbookRunToModify.ID, withPlaybookRun(playbookRunToModify))
 
 	return nil
 }
@@ -233,7 +239,7 @@ func (s *PlaybookRunServiceImpl) SetNewReminder(playbookRunID string, newReminde
 func (s *PlaybookRunServiceImpl) removePost(postID string) error {
 	post, err := s.pluginAPI.Post.GetPost(postID)
 	if err != nil {
-		return errors.Wrapf(err, "failed to retrieve reminder post")
+		return errors.Wrapf(err, "failed to retrieve reminder post %s", postID)
 	}
 
 	if post.DeleteAt != 0 {
@@ -241,7 +247,7 @@ func (s *PlaybookRunServiceImpl) removePost(postID string) error {
 	}
 
 	if err = s.pluginAPI.Post.DeletePost(postID); err != nil {
-		return errors.Wrapf(err, "failed to delete reminder post")
+		return errors.Wrapf(err, "failed to delete reminder post %s", postID)
 	}
 
 	return nil

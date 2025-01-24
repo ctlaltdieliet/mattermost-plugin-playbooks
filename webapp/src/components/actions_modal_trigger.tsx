@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -37,11 +37,13 @@ interface TriggerKeywordsProps {
     editable: boolean;
     keywords: string[];
     onUpdate: (newKeywords: string[]) => void;
+    testId?: string;
 }
 
-export const TriggerKeywords = ({editable, keywords, onUpdate}: TriggerKeywordsProps) => {
+export const TriggerKeywords = ({editable, keywords, onUpdate, testId}: TriggerKeywordsProps) => {
     return (
         <StyledKeywordsSelector
+            testId={testId}
             enabled={editable}
             placeholderText={'Type a keyword or phrase, then press Enter on your keyboard'}
             keywords={keywords}

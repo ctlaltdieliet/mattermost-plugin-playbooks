@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -6,6 +6,7 @@ import React from 'react';
 import styled from 'styled-components';
 
 interface ToggleProps {
+    children?: React.ReactNode
     isChecked: boolean;
     disabled?: boolean;
     onChange: () => void;
@@ -24,6 +25,7 @@ export const Toggle = (props: ToggleProps) => {
                 disabled={props.disabled}
             />
             <RoundSwitch disabled={props.disabled}/>
+            {props.children}
         </Label>
     );
 };
@@ -78,7 +80,11 @@ const InvisibleInput = styled.input`
 `;
 
 const Label = styled.label<DisabledProps>`
-    line-height: 0;
+    display: flex;
+    align-items: center;
+    column-gap: 12px;
+    font-weight: inherit;
+    line-height: 16px;
     cursor: ${({disabled}) => (disabled ? 'default' : 'pointer')};
     margin-bottom: 0;
 `;

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 export interface Playbook {
@@ -57,17 +57,20 @@ export interface PlaybookWithChecklist extends Playbook {
     channel_name_template: string;
     metrics: Metric[];
     is_favorite: boolean;
+    create_channel_member_on_new_participant: boolean;
+    remove_channel_member_on_removed_participant: boolean;
+
+    channel_mode: string;
+    channel_id: string;
 
     // Deprecated: preserved for backwards compatibility with v1.27
     broadcast_enabled: boolean;
     webhook_on_creation_enabled: boolean;
 }
 
-export enum MetricType {
-    Duration = 'metric_duration',
-    Currency = 'metric_currency',
-    Integer = 'metric_integer',
-}
+import {MetricType} from 'src/graphql/generated/graphql';
+
+export {MetricType};
 
 export interface Metric {
     id: string;
@@ -94,10 +97,6 @@ export interface FetchPlaybooksReturn {
     items: Playbook[];
 }
 
-export interface FetchPlaybooksCountReturn {
-    count: number;
-}
-
 export interface Checklist {
     title: string;
     items: ChecklistItem[];
@@ -111,15 +110,32 @@ export enum ChecklistItemState {
 }
 
 export interface ChecklistItem {
+    id?: string;
     title: string;
     description: string;
     state: ChecklistItemState | string;
-    state_modified?: number;
-    assignee_id?: string;
-    assignee_modified?: number;
+    state_modified: number;
+    assignee_id: string;
+    assignee_modified: number;
     command: string;
     command_last_run: number;
     due_date: number;
+    task_actions: TaskAction[];
+}
+
+export interface TaskAction {
+    trigger: Trigger;
+    actions: Action[];
+}
+
+export interface Trigger {
+    type: string;
+    payload: string;
+}
+
+export interface Action {
+    type: string;
+    payload: string;
 }
 
 export interface DraftPlaybookWithChecklist extends Omit<PlaybookWithChecklist, 'id'> {
@@ -185,6 +201,10 @@ export function emptyPlaybook(): DraftPlaybookWithChecklist {
         metrics: [],
         is_favorite: false,
         active_runs: 0,
+        create_channel_member_on_new_participant: true,
+        remove_channel_member_on_removed_participant: true,
+        channel_id: '',
+        channel_mode: 'create_new_channel',
     };
 }
 
@@ -203,6 +223,10 @@ export function emptyChecklistItem(): ChecklistItem {
         description: '',
         command_last_run: 0,
         due_date: 0,
+        task_actions: [] as TaskAction[],
+        state_modified: 0,
+        assignee_modified: 0,
+        assignee_id: '',
     };
 }
 
@@ -213,11 +237,16 @@ export const newChecklistItem = (title = '', description = '', command = '', sta
     command_last_run: 0,
     state,
     due_date: 0,
+    task_actions: [] as TaskAction[],
+    state_modified: 0,
+    assignee_modified: 0,
+    assignee_id: '',
 });
 
 export interface ChecklistItemsFilter extends Record<string, boolean> {
     all: boolean;
     checked: boolean;
+    skipped: boolean;
     me: boolean;
     unassigned: boolean;
     others: boolean;
@@ -227,6 +256,7 @@ export interface ChecklistItemsFilter extends Record<string, boolean> {
 export const ChecklistItemsFilterDefault: ChecklistItemsFilter = {
     all: false,
     checked: true,
+    skipped: true,
     me: true,
     unassigned: true,
     others: true,
@@ -241,11 +271,11 @@ export const newMetric = (type: MetricType, title = '', description = '', target
     target,
 });
 
-export const defaultMessageOnJoin = `Welcome! This channel was automatically created as part of a playbook run. You can [learn more about playbooks here](https://docs.mattermost.com/administration/devops-command-center.html?highlight=playbook#playbooks). To see information about this run, such as current owner and checklist of tasks, select the shield icon in the channel header.
+export const defaultMessageOnJoin = `Welcome! This channel was automatically created as part of a playbook run. You can [learn more about playbooks here](https://docs.mattermost.com/guides/playbooks.html). To see information about this run, such as current owner and checklist of tasks, select the shield icon in the channel header.
 
 Here are some resources that you may find helpful:
-[Mattermost community channel](https://community.mattermost.com/core/channels/ee-incident-response)
-[User guide and documentation](https://docs.mattermost.com/administration/devops-command-center.html)`;
+[Mattermost community channel](https://community.mattermost.com/core/channels/developers-playbooks)
+[User guide and documentation](https://docs.mattermost.com/guides/playbooks.html)`;
 
 export const defaultRetrospectiveTemplate = `### Summary
 This should contain 2-3 sentences that give a reader an overview of what happened, what was the cause, and what was done. The briefer the better as this is what future teams will look at first for reference.

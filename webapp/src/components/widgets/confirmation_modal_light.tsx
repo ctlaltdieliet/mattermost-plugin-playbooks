@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -61,7 +61,7 @@ const ConfirmModalTitle = styled.h1`
     font-family: Metropolis;
     font-size: 22px;
     line-height: 28px;
-
+    margin-top: 0;
     text-align: center;
     color: var(--center-channel-color);
 `;

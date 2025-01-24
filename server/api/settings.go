@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package api
 
 import (
@@ -7,7 +10,7 @@ import (
 	"github.com/mattermost/mattermost-plugin-playbooks/client"
 	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 // SettingsHandler is the API handler.
@@ -32,10 +35,7 @@ func NewSettingsHandler(router *mux.Router, api *pluginapi.Client, configService
 }
 
 func (h *SettingsHandler) getSettings(w http.ResponseWriter, r *http.Request) {
-	cfg := h.config.GetConfiguration()
-	settings := client.GlobalSettings{
-		EnableExperimentalFeatures: cfg.EnableExperimentalFeatures,
-	}
+	settings := client.GlobalSettings{}
 
 	ReturnJSON(w, &settings, http.StatusOK)
 }

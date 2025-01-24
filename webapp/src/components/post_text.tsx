@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {ReactNode, ReactNodeArray} from 'react';
@@ -32,9 +32,13 @@ const PostText = (props: Props) => {
         channelNamesMap,
     };
 
+    const messageHtmlToComponentOptions = {
+        hasPluginTooltips: true,
+    };
+
     return (
         <UpdateBody className={props.className}>
-            {messageHtmlToComponent(formatText(props.text, markdownOptions), true, {})}
+            {messageHtmlToComponent(formatText(props.text, markdownOptions), true, messageHtmlToComponentOptions)}
             {props.children}
         </UpdateBody>
     );

@@ -1,11 +1,11 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
 
-import Svg from '../svg';
+import Svg from 'src/components/assets/svg';
 
-const DumpsterFire = (props: {className?: string}) => (
+const DumpsterFire = () => (
     <Svg
         width='60'
         height='72'

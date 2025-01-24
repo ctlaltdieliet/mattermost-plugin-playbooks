@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package telemetry
 
 import (
@@ -194,10 +197,6 @@ func (t *NoopTelemetry) UpdateChannelAction(action app.GenericChannelAction, use
 
 // RunAction does nothing
 func (t *NoopTelemetry) RunAction(playbookRun *app.PlaybookRun, userID, triggerType, actionType string, numBroadcasts int) {
-}
-
-// UpdateRunActions does nothing
-func (t *NoopTelemetry) UpdateRunActions(playbookRun *app.PlaybookRun, userID string) {
 }
 
 // FavoriteItem does nothing

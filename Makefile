@@ -8,8 +8,8 @@ GO_TEST_FLAGS ?= -race
 GO_BUILD_FLAGS ?=
 MM_UTILITIES_DIR ?= ../mattermost-utilities
 DLV_DEBUG_PORT := 2346
-DEFAULT_GOOS := $(shell go env GOOS)
-DEFAULT_GOARCH := $(shell go env GOARCH)
+DEFAULT_GOOS ?= $(shell go env GOOS)
+DEFAULT_GOARCH ?= $(shell go env GOARCH)
 
 export GO111MODULE=on
 
@@ -34,18 +34,145 @@ ifneq ($(wildcard build/custom.mk),)
 	include build/custom.mk
 endif
 
+ifneq ($(MM_DEBUG),)
+	GO_BUILD_GCFLAGS = -gcflags "all=-N -l"
+else
+	GO_BUILD_GCFLAGS =
+endif
+
+# ====================================================================================
+# Used for semver bumping
+PROTECTED_BRANCH := master
+APP_NAME    := $(shell basename -s .git `git config --get remote.origin.url`)
+CURRENT_VERSION := $(shell git describe --abbrev=0 --tags)
+VERSION_PARTS := $(subst ., ,$(subst v,,$(subst -rc, ,$(CURRENT_VERSION))))
+MAJOR := $(word 1,$(VERSION_PARTS))
+MINOR := $(word 2,$(VERSION_PARTS))
+PATCH := $(word 3,$(VERSION_PARTS))
+RC := $(shell echo $(CURRENT_VERSION) | grep -oE 'rc[0-9]+' | sed 's/rc//')
+# Check if current branch is protected
+define check_protected_branch
+	@current_branch=$$(git rev-parse --abbrev-ref HEAD); \
+	if ! echo "$(PROTECTED_BRANCH)" | grep -wq "$$current_branch" && ! echo "$$current_branch" | grep -q "^release"; then \
+		echo "Error: Tagging is only allowed from $(PROTECTED_BRANCH) or release branches. You are on $$current_branch branch."; \
+		exit 1; \
+	fi
+endef
+# Check if there are pending pulls
+define check_pending_pulls
+	@git fetch; \
+	current_branch=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ "$$(git rev-parse HEAD)" != "$$(git rev-parse origin/$$current_branch)" ]; then \
+		echo "Error: Your branch is not up to date with upstream. Please pull the latest changes before performing a release"; \
+		exit 1; \
+	fi
+endef
+# Prompt for approval
+define prompt_approval
+	@read -p "About to bump $(APP_NAME) to version $(1), approve? (y/n) " userinput; \
+	if [ "$$userinput" != "y" ]; then \
+		echo "Bump aborted."; \
+		exit 1; \
+	fi
+endef
+# ====================================================================================
+
+.PHONY: patch minor major patch-rc minor-rc major-rc
+
+patch: ## to bump patch version (semver)
+	$(call check_protected_branch)
+	$(call check_pending_pulls)
+	@$(eval PATCH := $(shell echo $$(($(PATCH)+1))))
+	$(call prompt_approval,$(MAJOR).$(MINOR).$(PATCH))
+	@echo Bumping $(APP_NAME) to Patch version $(MAJOR).$(MINOR).$(PATCH)
+	git tag -s -a v$(MAJOR).$(MINOR).$(PATCH) -m "Bumping $(APP_NAME) to Patch version $(MAJOR).$(MINOR).$(PATCH)"
+	git push origin v$(MAJOR).$(MINOR).$(PATCH)
+	@echo Bumped $(APP_NAME) to Patch version $(MAJOR).$(MINOR).$(PATCH)
+
+minor: ## to bump minor version (semver)
+	$(call check_protected_branch)
+	$(call check_pending_pulls)
+	@$(eval MINOR := $(shell echo $$(($(MINOR)+1))))
+	@$(eval PATCH := 0)
+	$(call prompt_approval,$(MAJOR).$(MINOR).$(PATCH))
+	@echo Bumping $(APP_NAME) to Minor version $(MAJOR).$(MINOR).$(PATCH)
+	git tag -s -a v$(MAJOR).$(MINOR).$(PATCH) -m "Bumping $(APP_NAME) to Minor version $(MAJOR).$(MINOR).$(PATCH)"
+	git push origin v$(MAJOR).$(MINOR).$(PATCH)
+	@echo Bumped $(APP_NAME) to Minor version $(MAJOR).$(MINOR).$(PATCH)
+
+major: ## to bump major version (semver)
+	$(call check_protected_branch)
+	$(call check_pending_pulls)
+	$(eval MAJOR := $(shell echo $$(($(MAJOR)+1))))
+	$(eval MINOR := 0)
+	$(eval PATCH := 0)
+	$(call prompt_approval,$(MAJOR).$(MINOR).$(PATCH))
+	@echo Bumping $(APP_NAME) to Major version $(MAJOR).$(MINOR).$(PATCH)
+	git tag -s -a v$(MAJOR).$(MINOR).$(PATCH) -m "Bumping $(APP_NAME) to Major version $(MAJOR).$(MINOR).$(PATCH)"
+	git push origin v$(MAJOR).$(MINOR).$(PATCH)
+	@echo Bumped $(APP_NAME) to Major version $(MAJOR).$(MINOR).$(PATCH)
+
+patch-rc: ## to bump patch release candidate version (semver)
+	$(call check_protected_branch)
+	$(call check_pending_pulls)
+	@$(eval RC := $(shell echo $$(($(RC)+1))))
+	$(call prompt_approval,$(MAJOR).$(MINOR).$(PATCH)-rc$(RC))
+	@echo Bumping $(APP_NAME) to Patch RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+	git tag -s -a v$(MAJOR).$(MINOR).$(PATCH)-rc$(RC) -m "Bumping $(APP_NAME) to Patch RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)"
+	git push origin v$(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+	@echo Bumped $(APP_NAME) to Patch RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+
+minor-rc: ## to bump minor release candidate version (semver)
+	$(call check_protected_branch)
+	$(call check_pending_pulls)
+	@$(eval MINOR := $(shell echo $$(($(MINOR)+1))))
+	@$(eval PATCH := 0)
+	@$(eval RC := 1)
+	$(call prompt_approval,$(MAJOR).$(MINOR).$(PATCH)-rc$(RC))
+	@echo Bumping $(APP_NAME) to Minor RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+	git tag -s -a v$(MAJOR).$(MINOR).$(PATCH)-rc$(RC) -m "Bumping $(APP_NAME) to Minor RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)"
+	git push origin v$(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+	@echo Bumped $(APP_NAME) to Minor RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+
+major-rc: ## to bump major release candidate version (semver)
+	$(call check_protected_branch)
+	$(call check_pending_pulls)
+	@$(eval MAJOR := $(shell echo $$(($(MAJOR)+1))))
+	@$(eval MINOR := 0)
+	@$(eval PATCH := 0)
+	@$(eval RC := 1)
+	$(call prompt_approval,$(MAJOR).$(MINOR).$(PATCH)-rc$(RC))
+	@echo Bumping $(APP_NAME) to Major RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+	git tag -s -a v$(MAJOR).$(MINOR).$(PATCH)-rc$(RC) -m "Bumping $(APP_NAME) to Major RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)"
+	git push origin v$(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+	@echo Bumped $(APP_NAME) to Major RC version $(MAJOR).$(MINOR).$(PATCH)-rc$(RC)
+
 ## Checks the code style, tests, builds and bundles the plugin.
 .PHONY: all
 all: check-style test dist
+
+## Ensures the plugin manifest is valid
+.PHONY: manifest-check
+manifest-check:
+	./build/bin/manifest check
 
 ## Propagates plugin manifest information into the server/ and webapp/ folders.
 .PHONY: apply
 apply:
 	./build/bin/manifest apply
 
+## Install go tools
+install-go-tools:
+	@echo Installing go tools
+	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
+	$(GO) install github.com/golang/mock/mockgen@v1.6.0
+	$(GO) install gotest.tools/gotestsum@v1.7.0
+	$(GO) install github.com/cortesi/modd/cmd/modd@latest
+	$(GO) install github.com/mattermost/mattermost-govet/v2@3f08281c344327ac09364f196b15f9a81c7eff08
+
 ## Runs eslint and golangci-lint
 .PHONY: check-style
-check-style: apply webapp/node_modules check-golangci
+check-style: manifest-check apply webapp/node_modules e2e-tests/node_modules install-go-tools
 	@echo Checking for style guide compliance
 
 ifneq ($(HAS_WEBAPP),)
@@ -53,50 +180,50 @@ ifneq ($(HAS_WEBAPP),)
 	cd webapp && npm run check-types
 endif
 
-	cd tests-e2e && npm run check
+	cd e2e-tests && npm run check
 
+# It's highly recommended to run go-vet first
+# to find potential compile errors that could introduce
+# weird reports at golangci-lint step
 ifneq ($(HAS_SERVER),)
 	@echo Running golangci-lint
+	$(GO) vet ./...
 	$(GOBIN)/golangci-lint run ./...
+	$(GO) vet -vettool=$(GOBIN)/mattermost-govet -license -license.year=2020 ./...
 endif
 
-.PHONY: check-golangci
-check-golangci:
-ifneq ($(HAS_SERVER),)
-	@echo Ckecking golangci-lint
+## Fix JS file ESLint issues
+.PHONY: fix-style
+fix-style: apply webapp/node_modules e2e-tests/node_modules
+	@echo Fixing lint issues to follow style guide
 
-	@# Keep the version in sync with the command in .circleci/config.yml
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2
+ifneq ($(HAS_WEBAPP),)
+	cd webapp && npm run fix
 endif
+	cd e2e-tests && npm run fix
 
 
 ## Builds the server, if it exists, for all supported architectures, unless MM_SERVICESETTINGS_ENABLEDEVELOPER is set
 .PHONY: server
 server:
 ifneq ($(HAS_SERVER),)
-	mkdir -p server/dist;
-ifeq ($(MM_DEBUG),)
-ifneq ($(MM_SERVICESETTINGS_ENABLEDEVELOPER),)
-	cd server && $(GO) build $(GO_BUILD_FLAGS) -o dist/plugin-$(DEFAULT_GOOS)-$(DEFAULT_GOARCH);
-else
-	cd server && env GOOS=linux GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -trimpath -o dist/plugin-linux-amd64;
-	cd server && env GOOS=linux GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -trimpath -o dist/plugin-linux-arm64;
-	cd server && env GOOS=darwin GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -trimpath -o dist/plugin-darwin-amd64;
-	cd server && env GOOS=darwin GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -trimpath -o dist/plugin-darwin-arm64;
-	cd server && env GOOS=windows GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -trimpath -o dist/plugin-windows-amd64.exe;
-endif
-else
+ifneq ($(MM_DEBUG),)
 	$(info DEBUG mode is on; to disable, unset MM_DEBUG)
-ifneq ($(MM_SERVICESETTINGS_ENABLEDEVELOPER),)
-	cd server && $(GO) build $(GO_BUILD_FLAGS) -gcflags "all=-N -l" -trimpath -o dist/plugin-$(DEFAULT_GOOS)-$(DEFAULT_GOARCH);
-	cd server && ./dist/plugin-$(DEFAULT_GOOS)-$(DEFAULT_GOARCH) graphqlcheck
-else
-	cd server && env GOOS=darwin GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -gcflags "all=-N -l" -trimpath -o dist/plugin-darwin-amd64;
-	cd server && env GOOS=darwin GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -gcflags "all=-N -l" -trimpath -o dist/plugin-darwin-arm64;
-	cd server && env GOOS=linux GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -gcflags "all=-N -l" -trimpath -o dist/plugin-linux-amd64;
-	cd server && env GOOS=linux GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) -gcflags "all=-N -l" -trimpath -o dist/plugin-linux-arm64;
-	cd server && env GOOS=windows GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) -gcflags "all=-N -l" -trimpath -o dist/plugin-windows-amd64.exe;
 endif
+	mkdir -p server/dist;
+ifneq ($(MM_SERVICESETTINGS_ENABLEDEVELOPER),)
+	@echo Building plugin only for $(DEFAULT_GOOS)-$(DEFAULT_GOARCH) because MM_SERVICESETTINGS_ENABLEDEVELOPER is enabled
+	cd server && env CGO_ENABLED=0 GOOS=$(DEFAULT_GOOS) GOARCH=$(DEFAULT_GOARCH) $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/plugin-$(DEFAULT_GOOS)-$(DEFAULT_GOARCH);
+
+ifneq ($(MM_DEBUG),)
+	cd server && ./dist/plugin-$(DEFAULT_GOOS)-$(DEFAULT_GOARCH) graphqlcheck
+endif
+else
+	cd server && env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/plugin-linux-amd64;
+	cd server && env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/plugin-linux-arm64;
+	cd server && env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/plugin-darwin-amd64;
+	cd server && env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/plugin-darwin-arm64;
+	cd server && env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/plugin-windows-amd64.exe;
 endif
 endif
 
@@ -104,7 +231,14 @@ endif
 webapp/node_modules: $(wildcard webapp/package.json)
 ifneq ($(HAS_WEBAPP),)
 	cd webapp && node skip_integrity_check.js
-	cd webapp && $(NPM) install
+	cd webapp && $(NPM) install --ignore-scripts --legacy-peer-deps
+	touch $@
+endif
+
+## Ensures NPM dependencies are installed without having to run this all the time.
+e2e-tests/node_modules: $(wildcard e2e-tests/package.json)
+ifneq ($(HAS_WEBAPP),)
+	cd e2e-tests && $(NPM) install
 	touch $@
 endif
 
@@ -126,6 +260,12 @@ bundle:
 	rm -rf dist/
 	mkdir -p dist/$(PLUGIN_ID)
 	./build/bin/manifest dist
+ifneq ($(wildcard LICENSE.txt),)
+	cp -r LICENSE.txt dist/$(PLUGIN_ID)/
+endif
+ifneq ($(wildcard NOTICE.txt),)
+	cp -r NOTICE.txt dist/$(PLUGIN_ID)/
+endif
 ifneq ($(wildcard $(ASSETS_DIR)/.),)
 	cp -r $(ASSETS_DIR) dist/$(PLUGIN_ID)/
 endif
@@ -140,22 +280,30 @@ ifneq ($(HAS_WEBAPP),)
 	mkdir -p dist/$(PLUGIN_ID)/webapp
 	cp -r webapp/dist dist/$(PLUGIN_ID)/webapp/
 endif
+ifeq ($(shell uname),Darwin)
+	cd dist && tar --disable-copyfile -cvzf $(BUNDLE_NAME) $(PLUGIN_ID)
+else
 	cd dist && tar -cvzf $(BUNDLE_NAME) $(PLUGIN_ID)
+endif
 
 	@echo plugin built at: dist/$(BUNDLE_NAME)
 
 ## Builds and bundles the plugin.
 .PHONY: dist
-dist:	apply server webapp bundle
+dist: apply server webapp bundle
 
 ## Builds and installs the plugin to a server.
 .PHONY: deploy
-deploy: dist
-	./build/bin/pluginctl deploy $(PLUGIN_ID) dist/$(BUNDLE_NAME)
+deploy: dist upload-to-server
 
-## Builds and installs the plugin to a server, updating the webapp automatically when changed.
+## Builds and installs the plugin to a server, updating the plugin automatically when changed.
 .PHONY: watch
-watch: apply server bundle
+watch: apply install-go-tools bundle upload-to-server
+	$(GOBIN)/modd
+
+## Watch mode for webapp side
+.PHONY: watch-webapp
+watch-webapp:
 ifeq ($(MM_DEBUG),)
 	cd webapp && $(NPM) run build:watch
 else
@@ -169,7 +317,10 @@ dev: apply server bundle webapp/node_modules
 
 ## Installs a previous built plugin with updated webpack assets to a server.
 .PHONY: deploy-from-watch
-deploy-from-watch: bundle
+deploy-from-watch: bundle upload-to-server
+
+.PHONY: upload-to-server
+upload-to-server:
 	./build/bin/pluginctl deploy $(PLUGIN_ID) dist/$(BUNDLE_NAME)
 
 ## Setup dlv for attaching, identifying the plugin PID for other targets.
@@ -212,13 +363,9 @@ detach: setup-attach
 		kill -9 $$DELVE_PID ; \
 	fi
 
-## Ensure gotestsum is installed and available as a tool for testing.
-gotestsum:
-	$(GO) install gotest.tools/gotestsum@v1.7.0
-
 ## Runs any lints and unit tests defined for the server and webapp, if they exist.
 .PHONY: test
-test: apply webapp/node_modules gotestsum
+test: apply webapp/node_modules install-go-tools
 ifneq ($(HAS_SERVER),)
 	$(GOBIN)/gotestsum -- -v ./...
 endif
@@ -229,7 +376,7 @@ endif
 ## Runs any lints and unit tests defined for the server and webapp, if they exist, optimized
 ## for a CI environment.
 .PHONY: test-ci
-test-ci: apply webapp/node_modules gotestsum
+test-ci: apply webapp/node_modules install-go-tools
 ifneq ($(HAS_SERVER),)
 	$(GOBIN)/gotestsum --format standard-verbose --junitfile report.xml -- ./...
 endif
@@ -321,14 +468,13 @@ ifneq ($(HAS_WEBAPP),)
 endif
 	rm -fr build/bin/
 
-## Sync directory with a starter template
-sync:
-ifndef STARTERTEMPLATE_PATH
-	@echo STARTERTEMPLATE_PATH is not set.
-	@echo Set STARTERTEMPLATE_PATH to a local clone of https://github.com/mattermost/mattermost-plugin-starter-template and retry.
-	@exit 1
-endif
-	cd ${STARTERTEMPLATE_PATH} && go run ./build/sync/main.go ./build/sync/plan.yml $(PWD)
+.PHONY: logs
+logs:
+	./build/bin/pluginctl logs $(PLUGIN_ID)
+
+.PHONY: logs-watch
+logs-watch:
+	./build/bin/pluginctl logs-watch $(PLUGIN_ID)
 
 # Help documentation à la https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help:

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useEffect, useMemo, useState} from 'react';
@@ -15,8 +15,8 @@ import Dropdown from 'src/components/dropdown';
 
 import {Timestamp} from 'src/webapp_globals';
 
-import {defaultMakeOptions, Option} from './datetime_input';
-import {parse, parseDateTimes, Mode} from './datetime_parsing';
+import {Option, defaultMakeOptions} from './datetime_input';
+import {Mode, parse, parseDateTimes} from './datetime_parsing';
 
 import {formatDuration} from './formatted_duration';
 
@@ -121,7 +121,7 @@ export const DateTimeSelector = ({
         const duration = parse(locale, query, Mode.DurationValue);
 
         setOptionsDateTime(makeOptions?.(query, datetimes, duration ? [duration] : [], mode) ?? suggestedOptions);
-    }, 150), [makeOptions, suggestedOptions, mode]);
+    }, 150), [locale, makeOptions, suggestedOptions, mode]);
 
     const noDropdown = {DropdownIndicator: null, IndicatorSeparator: null};
     const components = props.customControl ? {
@@ -152,8 +152,8 @@ export const DateTimeSelector = ({
                 styles={selectStyles}
                 noOptionsMessage={() => <InvalidLabel>{formatMessage({defaultMessage: 'Invalid time duration'})}</InvalidLabel>}
                 onChange={onSelectedChange}
-                classNamePrefix='playbook-run-user-select' // TODO debt: rename
-                className='playbook-run-user-select' // TODO debt: rename
+                classNamePrefix='playbook-react-select'
+                className='playbook-react-select'
                 formatOptionLabel={OptionLabel}
                 {...props.customControlProps}
             />

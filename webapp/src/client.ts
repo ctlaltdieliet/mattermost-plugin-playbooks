@@ -1,12 +1,10 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import {AnyAction, Dispatch} from 'redux';
 import qs from 'qs';
 
 import {GetStateFunc} from 'mattermost-redux/types/actions';
-import {UserProfile} from '@mattermost/types/users';
-import {Channel} from '@mattermost/types/channels';
 import {IntegrationTypes} from 'mattermost-redux/action_types';
 import {Client4} from 'mattermost-redux/client';
 import {ClientError} from '@mattermost/client';
@@ -15,38 +13,42 @@ import {getCurrentChannel} from 'mattermost-redux/selectors/entities/channels';
 import {
     FetchPlaybookRunsParams,
     FetchPlaybookRunsReturn,
-    PlaybookRun,
     Metadata,
+    PlaybookRun,
     RunMetricData,
     StatusPostComplete,
 } from 'src/types/playbook_run';
 
 import {setTriggerId} from 'src/actions';
 import {OwnerInfo} from 'src/types/backstage';
-import {TelemetryViewTarget, TelemetryEventTarget, PlaybookRunViewTarget, PlaybookRunEventTarget} from 'src/types/telemetry';
+import {
+    PlaybookRunEventTarget,
+    PlaybookRunViewTarget,
+    TelemetryEventTarget,
+    TelemetryViewTarget,
+} from 'src/types/telemetry';
 import {
     Checklist,
+    ChecklistItem,
     ChecklistItemState,
+    DraftPlaybookWithChecklist,
     FetchPlaybooksParams,
     FetchPlaybooksReturn,
-    PlaybookWithChecklist,
-    DraftPlaybookWithChecklist,
     Playbook,
-    ChecklistItem,
+    PlaybookWithChecklist,
 } from 'src/types/playbook';
-import {PROFILE_CHUNK_SIZE, AdminNotificationType} from 'src/constants';
+import {AdminNotificationType} from 'src/constants';
 import {ChannelAction} from 'src/types/channel_actions';
-import {RunActions} from 'src/types/run_actions';
-import {EmptyPlaybookStats, PlaybookStats, Stats, SiteStats} from 'src/types/stats';
+import {EmptyPlaybookStats, PlaybookStats, SiteStats} from 'src/types/stats';
 
-import {pluginId} from './manifest';
+import manifest from './manifest';
 import {GlobalSettings, globalSettingsSetDefaults} from './types/settings';
 import {Category} from './types/category';
 import {InsightsResponse} from './types/insights';
 
 let siteURL = '';
 let basePath = '';
-let apiUrl = `${basePath}/plugins/${pluginId}/api/v0`;
+let apiUrl = `${basePath}/plugins/${manifest.id}/api/v0`;
 
 export const setSiteUrl = (url?: string): void => {
     if (url) {
@@ -57,7 +59,7 @@ export const setSiteUrl = (url?: string): void => {
         siteURL = '';
     }
 
-    apiUrl = `${basePath}/plugins/${pluginId}/api/v0`;
+    apiUrl = `${basePath}/plugins/${manifest.id}/api/v0`;
 };
 
 export const getSiteUrl = (): string => {
@@ -89,13 +91,23 @@ export async function fetchPlaybookRunStatusUpdates(id: string) {
     return doGet<StatusPostComplete[]>(`${apiUrl}/runs/${id}/status-updates`);
 }
 
-export async function createPlaybookRun(playbook_id: string, owner_user_id: string, team_id: string, name: string, description: string) {
+export async function createPlaybookRun(
+    playbook_id: string,
+    owner_user_id: string,
+    team_id: string,
+    name: string,
+    description: string,
+    channel_id?: string,
+    create_public_run?: boolean
+) {
     const run = await doPost(`${apiUrl}/runs`, JSON.stringify({
         owner_user_id,
         team_id,
         name,
         description,
         playbook_id,
+        channel_id,
+        create_public_run,
     }));
     return run as PlaybookRun;
 }
@@ -148,6 +160,12 @@ export async function fetchPlaybookRunByChannel(channelId: string) {
     const data = await doGet(`${apiUrl}/runs/channel/${channelId}`);
 
     return data as PlaybookRun;
+}
+
+export async function fetchPlaybookRunsForChannelByUser(channelId: string) {
+    const data = await doGet(`${apiUrl}/runs/channel/${channelId}/runs`);
+
+    return data as PlaybookRun[];
 }
 
 export async function fetchCheckAndSendMessageOnJoin(channelId: string) {
@@ -228,14 +246,14 @@ export async function savePlaybook(playbook: PlaybookWithChecklist | DraftPlaybo
 
 export async function archivePlaybook(playbookId: Playbook['id']) {
     const {data} = await doFetchWithTextResponse(`${apiUrl}/playbooks/${playbookId}`, {
-        method: 'delete',
+        method: 'DELETE',
     });
     return data;
 }
 
 export async function restorePlaybook(playbookId: Playbook['id']) {
     const {data} = await doFetchWithTextResponse(`${apiUrl}/playbooks/${playbookId}/restore`, {
-        method: 'put',
+        method: 'PUT',
     });
     return data;
 }
@@ -248,18 +266,6 @@ export async function importFile(file: any, teamId: string) {
 export async function duplicatePlaybook(playbookId: Playbook['id']) {
     const {id} = await doPost(`${apiUrl}/playbooks/${playbookId}/duplicate`, '');
     return id;
-}
-
-export async function fetchUsersInChannel(channelId: string): Promise<UserProfile[]> {
-    return Client4.getProfilesInChannel(channelId, 0, PROFILE_CHUNK_SIZE);
-}
-
-export async function fetchMyChannels(teamId: string): Promise<Channel[]> {
-    return Client4.getMyChannels(teamId);
-}
-
-export async function fetchUsersInTeam(teamId: string): Promise<UserProfile[]> {
-    return Client4.getProfilesInTeam(teamId, 0, 200);
 }
 
 export async function fetchOwnersInTeam(teamId: string): Promise<OwnerInfo[]> {
@@ -283,6 +289,14 @@ export async function finishRun(playbookRunId: string) {
 export async function restoreRun(playbookRunId: string) {
     try {
         return await doPut(`${apiUrl}/runs/${playbookRunId}/restore`);
+    } catch (error) {
+        return {error};
+    }
+}
+
+export async function toggleRunStatusUpdates(playbookRunId: string, status_enabled: boolean) {
+    try {
+        return await doPut(`${apiUrl}/runs/${playbookRunId}/status-update-enabled`, JSON.stringify({status_enabled}));
     } catch (error) {
         return {error};
     }
@@ -323,13 +337,6 @@ export async function setChecklistItemState(playbookRunID: string, checklistNum:
     } catch (error) {
         return {error: error as ClientError};
     }
-}
-
-export async function clientRemoveChecklistItem(playbookRunID: string, checklistNum: number, itemNum: number) {
-    await doFetchWithoutResponse(`${apiUrl}/runs/${playbookRunID}/checklists/${checklistNum}/item/${itemNum}`, {
-        method: 'delete',
-        body: '',
-    });
 }
 
 export async function clientDuplicateChecklistItem(playbookRunID: string, checklistNum: number, itemNum: number) {
@@ -409,12 +416,6 @@ export async function clientAddChecklist(playbookRunID: string, checklist: Check
     return data;
 }
 
-export async function clientRemoveChecklist(playbookRunID: string, checklistNum: number) {
-    const data = await doDelete(`${apiUrl}/runs/${playbookRunID}/checklists/${checklistNum}`);
-
-    return data;
-}
-
 export async function clientDuplicateChecklist(playbookRunID: string, checklistNum: number): Promise<void> {
     await doFetchWithoutResponse(`${apiUrl}/runs/${playbookRunID}/checklists/${checklistNum}/duplicate`, {
         method: 'post',
@@ -472,15 +473,6 @@ export async function fetchSiteStats(): Promise<SiteStats | null> {
     return data as SiteStats;
 }
 
-export async function fetchStats(teamID: string): Promise<Stats | null> {
-    const data = await doGet(`${apiUrl}/stats?team_id=${teamID}`);
-    if (!data) {
-        return null;
-    }
-
-    return data as Stats;
-}
-
 export async function fetchPlaybookStats(playbookID: string): Promise<PlaybookStats> {
     const data = await doGet(`${apiUrl}/stats/playbook?playbook_id=${playbookID}`);
     if (!data) {
@@ -533,13 +525,6 @@ export async function telemetryView(name: TelemetryViewTarget, properties: {[key
     });
 }
 
-export async function setGlobalSettings(settings: GlobalSettings) {
-    await doFetchWithoutResponse(`${apiUrl}/settings`, {
-        method: 'PUT',
-        body: JSON.stringify(settings),
-    });
-}
-
 export async function fetchGlobalSettings(): Promise<GlobalSettings> {
     const data = await doGet(`${apiUrl}/settings`);
     if (!data) {
@@ -584,24 +569,6 @@ export function exportChannelUrl(channelId: string) {
     return `${exportPluginUrl}/export${queryParams}`;
 }
 
-export async function trackRequestTrialLicense(action: string) {
-    await doFetchWithoutResponse(`${apiUrl}/telemetry/start-trial`, {
-        method: 'POST',
-        body: JSON.stringify({action}),
-    });
-}
-
-export const requestTrialLicense = async (users: number, action: string) => {
-    trackRequestTrialLicense(action);
-
-    try {
-        const response = await Client4.requestTrialLicense({users, terms_accepted: true, receive_emails_accepted: true});
-        return {data: response};
-    } catch (e) {
-        return {error: e.message};
-    }
-};
-
 export const postMessageToAdmins = async (messageType: AdminNotificationType) => {
     const body = `{"message_type": "${messageType}"}`;
     try {
@@ -610,29 +577,6 @@ export const postMessageToAdmins = async (messageType: AdminNotificationType) =>
     } catch (e) {
         return {error: e.message};
     }
-};
-
-export const promptForFeedback = async () => {
-    try {
-        const response = await doPost(`${apiUrl}/bot/prompt-for-feedback`);
-        return {data: response};
-    } catch (e) {
-        return {error: e.message};
-    }
-};
-
-export const changeChannelName = async (channelId: string, newName: string) => {
-    await doFetchWithoutResponse(`${basePath}/api/v4/channels/${channelId}/patch`, {
-        method: 'PUT',
-        body: JSON.stringify({display_name: newName}),
-    });
-};
-
-export const updatePlaybookRunDescription = async (playbookRunId: string, newDescription: string) => {
-    await doFetchWithoutResponse(`${apiUrl}/runs/${playbookRunId}/update-description`, {
-        method: 'PUT',
-        body: JSON.stringify({description: newDescription}),
-    });
 };
 
 export const notifyConnect = async () => {
@@ -667,15 +611,6 @@ export const autoUnfollowPlaybook = async (playbookId: string, userId: string) =
         method: 'DELETE',
     });
 };
-
-export async function clientFetchIsPlaybookFollower(playbookId: string, userId: string): Promise<boolean> {
-    const data = await doGet(`${apiUrl}/playbooks/${playbookId}/autofollows/${userId}`);
-    if (!data) {
-        return false;
-    }
-
-    return data as boolean;
-}
 
 export async function clientFetchPlaybookFollowers(playbookId: string): Promise<string[]> {
     const data = await doGet<string[]>(`${apiUrl}/playbooks/${playbookId}/autofollows`);
@@ -719,14 +654,6 @@ export const saveChannelAction = async (action: ChannelAction): Promise<string> 
     return action.id;
 };
 
-export const updateRunActions = async (playbookRunID: string, actions: RunActions) => {
-    try {
-        return await doPut<void>(`${apiUrl}/runs/${playbookRunID}/actions`, JSON.stringify(actions));
-    } catch (error) {
-        return {error};
-    }
-};
-
 export const requestUpdate = async (playbookRunId: string) => {
     try {
         return await doPost(`${apiUrl}/runs/${playbookRunId}/request-update`);
@@ -738,28 +665,6 @@ export const requestUpdate = async (playbookRunId: string) => {
 export const requestJoinChannel = async (playbookRunId: string) => {
     try {
         return await doPost(`${apiUrl}/runs/${playbookRunId}/request-join-channel`);
-    } catch (error) {
-        return {error};
-    }
-};
-
-export const favoriteItem = async (teamID: string, itemID: string, itemType: string) => {
-    try {
-        return await doPost<void>(`${apiUrl}/my_categories/favorites?team_id=${teamID}`, JSON.stringify({
-            item_id: itemID,
-            type: itemType,
-        }));
-    } catch (error) {
-        return {error};
-    }
-};
-
-export const unfavoriteItem = async (teamID: string, itemID: string, itemType: string) => {
-    try {
-        return await doDelete<void>(`${apiUrl}/my_categories/favorites?team_id=${teamID}`, JSON.stringify({
-            item_id: itemID,
-            type: itemType,
-        }));
     } catch (error) {
         return {error};
     }
@@ -794,7 +699,7 @@ export const doGet = async <TData = any>(url: string) => {
     return data;
 };
 
-export const doPost = async <TData = any>(url: string, body = {}) => {
+export const doPost = async <TData = any>(url: string, body: any = undefined) => {
     const {data} = await doFetchWithResponse<TData>(url, {
         method: 'POST',
         body,
@@ -803,27 +708,9 @@ export const doPost = async <TData = any>(url: string, body = {}) => {
     return data;
 };
 
-export const doDelete = async <TData = any>(url: string, body = {}) => {
-    const {data} = await doFetchWithResponse<TData>(url, {
-        method: 'DELETE',
-        body,
-    });
-
-    return data;
-};
-
-export const doPut = async <TData = any>(url: string, body = {}) => {
+export const doPut = async <TData = any>(url: string, body: any = undefined) => {
     const {data} = await doFetchWithResponse<TData>(url, {
         method: 'PUT',
-        body,
-    });
-
-    return data;
-};
-
-export const doPatch = async <TData = any>(url: string, body = {}) => {
-    const {data} = await doFetchWithResponse<TData>(url, {
-        method: 'PATCH',
         body,
     });
 

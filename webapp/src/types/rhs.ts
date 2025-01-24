@@ -1,10 +1,5 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
-
-export enum RHSState {
-    ViewingList,
-    ViewingPlaybookRun,
-}
 
 export enum TimelineEventType {
     RunCreated = 'incident_created',
@@ -17,10 +12,13 @@ export enum TimelineEventType {
     RanSlashCommand = 'ran_slash_command',
     EventFromPost = 'event_from_post',
     UserJoinedLeft = 'user_joined_left',
+    ParticipantsChanged = 'participants_changed',
     PublishedRetrospective = 'published_retrospective',
     CanceledRetrospective = 'canceled_retrospective',
     RunFinished = 'run_finished',
     RunRestored = 'run_restored',
+    StatusUpdatesEnabled = 'status_updates_enabled',
+    StatusUpdatesDisabled = 'status_updates_disabled'
 }
 
 export interface TimelineEvent {
@@ -62,3 +60,21 @@ export const TimelineEventsFilterDefault = {
     ran_slash_command: false,
     user_joined_left: false,
 };
+
+export interface ParticipantsChangedDetails {
+    action: string;
+    requester: string;
+    users: string[];
+}
+
+export interface UserJoinedLeftDetails {
+    title?: string;
+    action: string;
+    requester: string;
+    users: string[];
+}
+
+export interface TaskStateModifiedDetails {
+    action: string | 'check' | 'uncheck' | 'skip' | 'restore';
+    task: string;
+}

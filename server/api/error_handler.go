@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 package api
@@ -23,7 +23,7 @@ func (h *ErrorHandler) HandleErrorWithCode(w http.ResponseWriter, logger logrus.
 	HandleErrorWithCode(logger, w, code, publicErrorMsg, internalErr)
 }
 
-// PermissionsCheck handles the output of a permisions check
+// PermissionsCheck handles the output of a permission check
 // Automatically does the proper error handling.
 // Returns true if the check passed and false on failure. Correct use is: if !h.PermissionsCheck(w, check) { return }
 func (h *ErrorHandler) PermissionsCheck(w http.ResponseWriter, logger logrus.FieldLogger, checkOutput error) bool {

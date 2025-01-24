@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import styled from 'styled-components';
@@ -16,6 +16,16 @@ export const AutomationTitle = styled.div`
     width: 350px;
     align-items: center;
     column-gap: 12px;
+`;
+
+export const AutomationLabel = styled.label<{disabled?: boolean}>`
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    column-gap: 12px;
+    font-weight: inherit;
+    margin-bottom: 0;
+    cursor: ${({disabled}) => (disabled ? 'default' : 'pointer')};
 `;
 
 export const SelectorWrapper = styled.div`

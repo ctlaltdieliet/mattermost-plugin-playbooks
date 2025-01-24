@@ -1,6 +1,7 @@
-import {
-    changeOpacity,
-} from 'mattermost-redux/utils/theme_utils';
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
+import {changeOpacity} from 'mattermost-redux/utils/theme_utils';
 import cssVars from 'css-vars-ponyfill';
 
 export function applyTheme(theme: any) {

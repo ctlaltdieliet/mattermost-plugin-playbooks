@@ -1,11 +1,11 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
 import {FormattedMessage, useIntl} from 'react-intl';
 import styled from 'styled-components';
 
-import {PlayOutlineIcon, NotebookOutlineIcon, PencilOutlineIcon} from '@mattermost/compass-icons/components';
+import {NotebookOutlineIcon, PencilOutlineIcon, PlayOutlineIcon} from '@mattermost/compass-icons/components';
 
 import {PlaybookRun} from 'src/types/playbook_run';
 import {navigateToPluginUrl} from 'src/browser_routing';
@@ -19,6 +19,7 @@ interface Props {
     collapsed: boolean;
     toggleCollapsed: () => void;
     editSummary: () => void;
+    readOnly?: boolean;
 }
 
 const RHSAboutButtons = (props: Props) => {
@@ -52,17 +53,21 @@ const RHSAboutButtons = (props: Props) => {
                 portal={false}
                 focusManager={{returnFocus: false}}
             >
-                <StyledDropdownMenuItem
-                    onClick={() => {
-                        props.editSummary();
-                    }}
-                >
-                    <IconWrapper>
-                        <PencilOutlineIcon size={20}/>
-                    </IconWrapper>
-                    <FormattedMessage defaultMessage='Edit run summary'/>
-                </StyledDropdownMenuItem>
-                <Separator/>
+                {!props.readOnly &&
+                <>
+                    <StyledDropdownMenuItem
+                        onClick={() => {
+                            props.editSummary();
+                        }}
+                    >
+                        <IconWrapper>
+                            <PencilOutlineIcon size={20}/>
+                        </IconWrapper>
+                        <FormattedMessage defaultMessage='Edit run summary'/>
+                    </StyledDropdownMenuItem>
+                    <Separator/>
+                </>
+                }
                 <StyledDropdownMenuItem onClick={() => navigateToPluginUrl(overviewURL)}>
                     <IconWrapper>
                         <PlayOutlineIcon size={22}/>

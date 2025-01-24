@@ -1,13 +1,24 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {Fragment, useMemo} from 'react';
 import styled from 'styled-components';
 
 import {getTeam} from 'mattermost-redux/selectors/entities/teams';
-import {useSelector, useDispatch} from 'react-redux';
+import {useDispatch, useSelector} from 'react-redux';
 import {FormattedMessage, useIntl} from 'react-intl';
-import {PlayOutlineIcon, RestoreIcon, ArchiveOutlineIcon, ExportVariantIcon, ContentCopyIcon, PencilOutlineIcon, CloseIcon, EyeOutlineIcon, AccountPlusOutlineIcon, DotsVerticalIcon} from '@mattermost/compass-icons/components';
+import {
+    AccountPlusOutlineIcon,
+    ArchiveOutlineIcon,
+    CloseIcon,
+    ContentCopyIcon,
+    DotsVerticalIcon,
+    ExportVariantIcon,
+    EyeOutlineIcon,
+    PencilOutlineIcon,
+    PlayOutlineIcon,
+    RestoreIcon,
+} from '@mattermost/compass-icons/components';
 import {Client4} from 'mattermost-redux/client';
 import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 import {GlobalState} from '@mattermost/types/store';
@@ -15,17 +26,27 @@ import {GlobalState} from '@mattermost/types/store';
 import {useHasPlaybookPermission, useHasTeamPermission} from 'src/hooks';
 import {Playbook} from 'src/types/playbook';
 import TextWithTooltip from 'src/components/widgets/text_with_tooltip';
-import DotMenu, {DropdownMenuItem as DropdownMenuItemBase, DropdownMenuItemStyled, iconSplitStyling} from 'src/components/dot_menu';
+import DotMenu, {
+    DotMenuButton,
+    DropdownMenuItem as DropdownMenuItemBase,
+    DropdownMenuItemStyled,
+    iconSplitStyling,
+} from 'src/components/dot_menu';
 import Tooltip from 'src/components/widgets/tooltip';
-import {createPlaybookRun, playbookExportProps, telemetryEventForPlaybook} from 'src/client';
+import {
+    createPlaybookRun,
+    playbookExportProps,
+    telemetryEvent,
+    telemetryEventForPlaybook,
+} from 'src/client';
 import {PlaybookPermissionGeneral} from 'src/types/permissions';
-import {TertiaryButton, SecondaryButton} from 'src/components/assets/buttons';
-import {navigateToUrl} from 'src/browser_routing';
+import {SecondaryButton, TertiaryButton} from 'src/components/assets/buttons';
+import {navigateToPluginUrl, navigateToUrl} from 'src/browser_routing';
 import {usePlaybookMembership} from 'src/graphql/hooks';
 import {Timestamp} from 'src/webapp_globals';
 import {openPlaybookRunModal} from 'src/actions';
 
-import {DotMenuButton} from '../dot_menu';
+import {PlaybookRunEventTarget} from 'src/types/telemetry';
 
 import {InfoLine} from './styles';
 import {playbookIsTutorialPlaybook} from './playbook_editor/controls';
@@ -129,14 +150,15 @@ const PlaybookListRow = (props: Props) => {
         }
         if (props.playbook?.id) {
             telemetryEventForPlaybook(props.playbook.id, 'playbook_list_run_clicked');
-            dispatch(openPlaybookRunModal(
-                props.playbook.id,
-                props.playbook.default_owner_enabled ? props.playbook.default_owner_id : null,
-                props.playbook.description,
-                props.playbook.team_id,
-                team.name,
-                refreshLHS
-            ));
+            dispatch(openPlaybookRunModal({
+                onRunCreated: (runId, channelId, statsData) => {
+                    navigateToPluginUrl(`/runs/${runId}?from=run_modal`);
+                    refreshLHS();
+                    telemetryEvent(PlaybookRunEventTarget.Create, {...statsData, place: 'backstage_playbook_list'});
+                },
+                playbookId: props.playbook.id,
+                teamId: team.id,
+            }));
         }
     };
 
@@ -158,6 +180,7 @@ const PlaybookListRow = (props: Props) => {
         <PlaybookItem
             key={props.playbook.id}
             onClick={props.onClick}
+            data-testid='playbook-item'
         >
             <PlaybookItemTitle data-testid='playbook-title'>
                 <TextWithTooltip
@@ -168,6 +191,7 @@ const PlaybookListRow = (props: Props) => {
                     <InfoLine>
                         {infos.map((info, i) => (
                             <Fragment key={props.playbook.id + '-infoline' + i}>
+                                {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                                 {i > 0 && ' - '}
                                 {info}
                             </Fragment>))}
@@ -181,7 +205,7 @@ const PlaybookListRow = (props: Props) => {
                         value={props.playbook.last_run_at}
                     />
                 ) : (
-                    '-'
+                    '-' // eslint-disable-line formatjs/no-literal-string-in-jsx
                 )}
             </PlaybookItemRow>
             <PlaybookItemRow>{props.playbook.active_runs}</PlaybookItemRow>

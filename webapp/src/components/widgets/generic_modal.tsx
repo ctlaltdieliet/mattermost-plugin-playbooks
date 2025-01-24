@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import styled from 'styled-components';
@@ -14,6 +14,8 @@ type Props = {
     onHide: () => void;
     onExited?: () => void;
     modalHeaderText?: React.ReactNode;
+    modalHeaderSideText?: React.ReactNode;
+    modalHeaderIcon?: React.ReactNode;
     show?: boolean;
     showCancel?: boolean;
     handleCancel?: (() => void) | null;
@@ -118,6 +120,7 @@ export default class GenericModal extends React.PureComponent<Props, State> {
 
         const Header = this.props.components?.Header || Modal.Header;
         const FooterContainer = this.props.components?.FooterContainer || DefaultFooterContainer;
+        const showFooter = Boolean(confirmButton || cancelButton || this.props.footer !== undefined);
 
         return (
             <StyledModal
@@ -142,15 +145,17 @@ export default class GenericModal extends React.PureComponent<Props, State> {
                 </Header>
                 <>
                     <Modal.Body>{this.props.children}</Modal.Body>
-                    <Modal.Footer>
-                        <FooterContainer>
-                            <Buttons>
-                                {cancelButton}
-                                {confirmButton}
-                            </Buttons>
-                            {this.props.footer}
-                        </FooterContainer>
-                    </Modal.Footer>
+                    {showFooter ? (
+                        <Modal.Footer>
+                            <FooterContainer>
+                                <Buttons>
+                                    {cancelButton}
+                                    {confirmButton}
+                                </Buttons>
+                                {this.props.footer}
+                            </FooterContainer>
+                        </Modal.Footer>
+                    ) : null}
                 </>
             </StyledModal>
         );
@@ -164,21 +169,11 @@ export const StyledModal = styled(Modal)`
         place-content: start center;
         padding: 8px;
         /* content-spacing */
-        .modal-header {
-            margin-bottom: 8px;
-        }
         .modal-body {
             overflow: visible;
+            padding: 0 32px;
         }
-        .modal-content {
-            padding: 24px;
-        }
-        .modal-footer {
-            padding: 24px 0 0 0;
-        }
-        .close {
-            margin: 12px 12px 0 0;
-        }
+
         .modal-dialog {
             margin: 0px !important;
             max-width: 100%;
@@ -216,13 +211,24 @@ export const ModalHeading = styled.h1`
     font-size: 22px;
     line-height: 28px;
     color: var(--center-channel-color);
+    margin: 0;
+`;
+
+export const ModalSideheading = styled.h6`
+    font-size: 12px;
+    line-height: 20px;
+    color: rgba(var(--center-channel-color-rgb), 0.56);
+    padding-left: 8px;
+    margin: 0 0 0 8px;
+    border-left: solid 1px rgba(var(--center-channel-color-rgb), 0.56);
 `;
 
 export const ModalSubheading = styled.h6`
     font-size: 12px;
     line-height: 16px;
     margin-top: 6px;
-
+    margin-bottom: 0;
+    font-family: 'Open Sans';
     color: rgba(var(--center-channel-color-rgb), 0.72);
 `;
 

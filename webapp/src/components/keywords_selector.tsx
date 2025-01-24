@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useState} from 'react';
@@ -12,6 +12,7 @@ interface Props {
     keywords: string[];
     onKeywordsChange: (keywords: string[]) => void;
     className?: string;
+    testId?: string;
 }
 
 const KeywordsSelector = (props: Props) => {
@@ -58,6 +59,7 @@ const KeywordsSelector = (props: Props) => {
 
     return (
         <CreatableSelect
+            id={props.testId}
             className={props.className}
             components={selectComponents}
             isDisabled={!props.enabled}

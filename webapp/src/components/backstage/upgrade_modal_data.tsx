@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import React from 'react';
 
 import {DateTime} from 'luxon';
@@ -8,7 +11,7 @@ import styled from 'styled-components';
 
 import ConvertEnterpriseNotice from 'src/components/backstage/convert_enterprise_notice';
 
-import Spinner from 'src/components/assets/icons/spinner';
+import LoadingSpinner from 'src/components/assets/loading_spinner';
 
 import {AdminNotificationType} from 'src/constants';
 
@@ -67,7 +70,7 @@ export const getUpgradeModalButtons = (isAdmin: boolean, isServerTeamEdition: bo
     case ModalActionState.Loading:
         return {
             confirmButtonText: '',
-            cancelButtonText: <Spinner/>,
+            cancelButtonText: <LoadingSpinner/>,
             // eslint-disable-next-line no-undefined
             handleConfirm: undefined,
             handleCancel: () => { /*do nothing*/ },

@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import "fmt"
@@ -14,10 +17,6 @@ func GetRunDetailsRelativeURL(playbookRunID string) string {
 
 func GetPlaybookDetailsRelativeURL(playbookID string) string {
 	return fmt.Sprintf("%s/%s", PlaybooksPath, playbookID)
-}
-
-func getPlaybooksNewRelativeURL() string {
-	return fmt.Sprintf("%s/new", PlaybooksPath)
 }
 
 // absolute urls

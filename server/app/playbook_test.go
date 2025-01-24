@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
 import (
@@ -100,6 +103,7 @@ func TestPlaybookFilterOptions_Clone(t *testing.T) {
 	err = json.Unmarshal(marshalledOptions, &unmarshalledOptions)
 	require.NoError(t, err)
 	require.Equal(t, options, unmarshalledOptions)
+	require.NotEqual(t, clone, unmarshalledOptions)
 }
 
 func TestPlaybookFilterOptions_Validate(t *testing.T) {

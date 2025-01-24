@@ -1,21 +1,37 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState, useEffect, useCallback} from 'react';
-import {useSelector, useDispatch} from 'react-redux';
+import React, {useCallback, useEffect, useState} from 'react';
+import {useDispatch, useSelector} from 'react-redux';
 import {useIntl} from 'react-intl';
 
 import {getCurrentChannelId} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/common';
 
+import Permissions from 'mattermost-redux/constants/permissions';
+
+import {getCurrentTeamId} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/teams';
+
+import {getChannel} from 'mattermost-webapp/packages/mattermost-redux/src/selectors/entities/channels';
+
+import {GlobalState} from 'mattermost-webapp/packages/types/src/store';
+
 import {fetchChannelActions, saveChannelAction} from 'src/client';
 import {hideChannelActionsModal} from 'src/actions';
-import {isChannelActionsModalVisible, isCurrentUserChannelAdmin, isCurrentUserAdmin} from 'src/selectors';
+import {isChannelActionsModalVisible} from 'src/selectors';
 import Action from 'src/components/actions_modal_action';
 import Trigger, {TriggerKeywords} from 'src/components/actions_modal_trigger';
-import {ChannelActionType, ChannelTriggerType, WelcomeMessageActionPayload, CategorizeChannelPayload, PromptRunPlaybookFromKeywordsPayload, PayloadType} from 'src/types/channel_actions';
+import {
+    CategorizeChannelPayload,
+    ChannelActionType,
+    ChannelTriggerType,
+    PayloadType,
+    PromptRunPlaybookFromKeywordsPayload,
+    WelcomeMessageActionPayload,
+} from 'src/types/channel_actions';
 
 import ActionsModal, {ActionsContainer, TriggersContainer} from 'src/components/actions_modal';
 import {CategorizeChannelChildren, RunPlaybookChildren, WelcomeActionChildren} from 'src/components/actions_modal_action_children';
+import {useHasChannelPermission} from 'src/hooks/permissions';
 
 interface ActionState<T extends PayloadType> {
     id: string | undefined,
@@ -63,14 +79,16 @@ const ChannelActionsModal = () => {
     const dispatch = useDispatch();
     const show = useSelector(isChannelActionsModalVisible);
     const channelID = useSelector(getCurrentChannelId);
-    const isChannelAdmin = useSelector(isCurrentUserChannelAdmin);
-    const isSysAdmin = useSelector(isCurrentUserAdmin);
+    const channel = useSelector((state: GlobalState) => getChannel(state, channelID));
+    const teamID = useSelector(getCurrentTeamId);
+    const publicChannelPermission = useHasChannelPermission(teamID, channelID, Permissions.MANAGE_PUBLIC_CHANNEL_PROPERTIES);
+    const privateChannelPermission = useHasChannelPermission(teamID, channelID, Permissions.MANAGE_PRIVATE_CHANNEL_PROPERTIES);
 
     const [welcomeMsg, setWelcomeMsg, welcomeMsgInit, welcomeMsgReset, welcomeMsgOverwrite] = useActionState(welcomeMsgEmptyState);
     const [categorization, setCategorization, categorizationInit, categorizationReset, categorizationOverwrite] = useActionState(categorizationEmptyState);
     const [prompt, setPrompt, promptInit, promptReset, promptOverwrite] = useActionState(promptEmptyState);
 
-    const editable = isChannelAdmin || isSysAdmin;
+    const editable = channel?.type === 'O' ? publicChannelPermission : privateChannelPermission;
 
     useEffect(() => {
         const getActions = async (id: string) => {
@@ -97,10 +115,10 @@ const ChannelActionsModal = () => {
             });
         };
 
-        if (channelID) {
+        if (channelID && show) {
             getActions(channelID);
         }
-    }, [channelID, welcomeMsgInit, categorizationInit, promptInit]);
+    }, [channelID, show, welcomeMsgInit, categorizationInit, promptInit]);
 
     const onHide = () => {
         welcomeMsgReset();

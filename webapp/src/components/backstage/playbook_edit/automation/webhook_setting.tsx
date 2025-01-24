@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -33,8 +33,9 @@ export const WebhookSetting = (props: Props) => {
                     isChecked={props.enabled}
                     onChange={props.onToggle}
                     disabled={props.disabled}
-                />
-                <div>{props.textOnToggle}</div>
+                >
+                    {props.textOnToggle}
+                </Toggle>
             </AutomationTitle>
             <SelectorWrapper>
                 <PatternedTextArea

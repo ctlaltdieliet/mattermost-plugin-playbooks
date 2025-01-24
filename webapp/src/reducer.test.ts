@@ -1,6 +1,7 @@
-import {
-    REMOVED_FROM_CHANNEL,
-} from 'src/types/actions';
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
+import {REMOVED_FROM_CHANNEL} from 'src/types/actions';
 import reducer from 'src/reducer';
 
 describe('myPlaybookRunsByTeam', () => {

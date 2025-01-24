@@ -1,7 +1,9 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
 import React, {useRef, useState} from 'react';
 import {useUpdateEffect} from 'react-use';
-import styled from 'styled-components';
+import styled, {css} from 'styled-components';
 import {useIntl} from 'react-intl';
 import {ClientError} from '@mattermost/client';
 
@@ -11,7 +13,9 @@ import {PrimaryButton, TertiaryButton} from 'src/components/assets/buttons';
 interface CheckBoxButtonProps {
     onChange: (item: ChecklistItemState) => undefined | Promise<void | {error: ClientError}>;
     item: ChecklistItem;
-    disabled: boolean;
+    readOnly: boolean;//when true, component can receive events, but can't be modified.
+    disabled?: boolean;
+    onReadOnlyInteract?: () => void;
 }
 
 export const CheckBoxButton = (props: CheckBoxButtonProps) => {
@@ -30,6 +34,10 @@ export const CheckBoxButton = (props: CheckBoxButtonProps) => {
     //     Additionally, we prevent the user from clicking multiple times
     //     and leaving the item in an unknown state
     const handleOnChange = async () => {
+        if (props.readOnly) {
+            props.onReadOnlyInteract?.();
+            return;
+        }
         const newValue = isChecked ? ChecklistItemState.Open : ChecklistItemState.Closed;
         setIsChecked(!isChecked);
         const res = await props.onChange(newValue);
@@ -43,15 +51,23 @@ export const CheckBoxButton = (props: CheckBoxButtonProps) => {
             className='checkbox'
             type='checkbox'
             checked={isChecked}
-            disabled={props.disabled}
             onChange={handleOnChange}
+            disabled={props.disabled}
+            readOnly={props.readOnly}
         />);
 };
 
-const ChecklistItemInput = styled.input`
+const ChecklistItemInput = styled.input<{readOnly: boolean}>`
     :disabled:hover {
         cursor: default;
     }
+
+    ${({readOnly}) => readOnly && css`
+        opacity: 0.38;
+        &&:hover {
+            cursor: default;
+        }
+    `}
 `;
 
 export const CollapsibleChecklistItemDescription = (props: {expanded: boolean, children: React.ReactNode}) => {

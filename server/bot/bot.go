@@ -1,10 +1,13 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package bot
 
 import (
-	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost-plugin-playbooks/server/config"
 )
 
 // Bot stores the information for the plugin configuration, and implements the Poster interfaces.
@@ -59,9 +62,6 @@ type Poster interface {
 
 	// NotifyAdmins sends a DM with the message to each admins
 	NotifyAdmins(message, authorUserID string, isTeamEdition bool) error
-
-	// PromptForFeedback sends a DM as the feedbackbot to the given user, prompting for product feedback.
-	PromptForFeedback(userID string) error
 
 	// IsFromPoster returns whether the provided post was sent by this poster
 	IsFromPoster(post *model.Post) bool

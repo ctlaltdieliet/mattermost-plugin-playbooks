@@ -1,7 +1,10 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.enterprise for license information.
+
 package enterprise
 
 import (
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 type LicenseChecker struct {

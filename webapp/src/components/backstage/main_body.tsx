@@ -1,11 +1,22 @@
-import React from 'react';
-import {Switch, Route, useRouteMatch, Redirect, useLocation, matchPath, useHistory} from 'react-router-dom';
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
 
-import {useSelector, useDispatch} from 'react-redux';
+import React from 'react';
+import {
+    Redirect,
+    Route,
+    Switch,
+    matchPath,
+    useHistory,
+    useLocation,
+    useRouteMatch,
+} from 'react-router-dom';
+
+import {useDispatch, useSelector} from 'react-redux';
 
 import {getCurrentTeamId, getMyTeams} from 'mattermost-redux/selectors/entities/teams';
 
-import {useUpdateEffect, useEffectOnce, useLocalStorage} from 'react-use';
+import {useEffectOnce, useLocalStorage, useUpdateEffect} from 'react-use';
 
 import {selectTeam} from 'mattermost-redux/actions/teams';
 
@@ -77,39 +88,42 @@ export const useDefaultRedirectOnTeamChange = (teamScopedModelTeamId: string | u
 };
 
 const MainBody = () => {
+    const mattermostIDFormat = '[a-z0-9]{26}';
     const match = useRouteMatch();
     useInitTeamRoutingLogic();
 
     return (
         <Switch>
-            <Route
-                path={`${match.url}/playbooks/:playbookId`}
-            >
+            <Route path={`${match.url}/playbooks/:playbookId(${mattermostIDFormat})/:tab(outline|reports)?`}>
                 <PlaybookEditor/>
             </Route>
-            <Route path={`${match.url}/playbooks`}>
+            <Route
+                path={`${match.url}/playbooks`}
+                exact={true}
+            >
                 <PlaybookList/>
             </Route>
             <Redirect
                 from={`${match.url}/incidents/:playbookRunId`}
                 to={`${match.url}/runs/:playbookRunId`}
             />
-            <Route path={`${match.url}/runs/:playbookRunId`}>
+            <Route path={`${match.url}/runs/:playbookRunId(${mattermostIDFormat})`}>
                 <PlaybookRun/>
             </Route>
             <Redirect
                 from={`${match.url}/incidents`}
                 to={`${match.url}/runs`}
             />
-            <Route path={`${match.url}/runs`}>
+            <Route
+                path={`${match.url}/runs`}
+                exact={true}
+            >
                 <RunsPage/>
             </Route>
             <Route path={`${match.url}/error`}>
                 <ErrorPage/>
             </Route>
-            <Route
-                path={`${match.url}/start`}
-            >
+            <Route path={`${match.url}/start`}>
                 <PlaybookList firstTimeUserExperience={true}/>
             </Route>
             <Route

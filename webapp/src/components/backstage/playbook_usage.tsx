@@ -1,8 +1,13 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import styled from 'styled-components';
-import React, {useEffect, useState, ReactNode, HTMLAttributes} from 'react';
+import React, {
+    HTMLAttributes,
+    ReactNode,
+    useEffect,
+    useState,
+} from 'react';
 
 import StatsView from 'src/components/backstage/stats_view';
 

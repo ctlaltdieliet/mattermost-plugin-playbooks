@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package config
 
 // Configuration captures the plugin's external configuration as exposed in the Mattermost server
@@ -12,25 +15,12 @@ package config
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type Configuration struct {
-	// PlaybookCreatorsUserIds is a list of users that can edit playbooks
-	PlaybookCreatorsUserIds []string
-
-	// EnableExperimentalFeatures determines if experimental features are enabled.
-	EnableExperimentalFeatures bool
-
-	// ** The following are NOT stored on the server
-	// AdminUserIDs contains a list of user IDs that are allowed
-	// to administer plugin functions, even if not Mattermost sysadmins.
-	AllowedUserIDs []string
-
 	// BotUserID used to post messages.
 	BotUserID string
 
-	// AdminLogLevel is "debug", "info", "warn", or "error".
-	AdminLogLevel string
-
-	// AdminLogVerbose: set to include full context with admin log messages.
-	AdminLogVerbose bool
+	EnableTeamsTabApp    bool   `json:"enableteamstabapp"`
+	TeamsTabAppTenantIDs string `json:"teamstabapptenantids"`
+	TeamsTabAppBotUserID string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -43,5 +33,8 @@ func (c *Configuration) Clone() *Configuration {
 func (c *Configuration) serialize() map[string]interface{} {
 	ret := make(map[string]interface{})
 	ret["BotUserID"] = c.BotUserID
+	ret["EnableTeamsTabApp"] = c.EnableTeamsTabApp
+	ret["TeamsTabAppTenantIDs"] = c.TeamsTabAppTenantIDs
+	ret["TeamsTabAppBotUserID"] = c.TeamsTabAppBotUserID
 	return ret
 }

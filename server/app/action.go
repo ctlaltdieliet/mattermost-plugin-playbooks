@@ -1,6 +1,9 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package app
 
-import "github.com/mattermost/mattermost-server/v6/model"
+import "github.com/mattermost/mattermost/server/public/model"
 
 type GenericChannelActionWithoutPayload struct {
 	ID          string      `json:"id"`
@@ -70,10 +73,6 @@ type ChannelActionService interface {
 	// filtered with the options if different from its zero value
 	GetChannelActions(channelID string, options GetChannelActionOptions) ([]GenericChannelAction, error)
 
-	// Validate checks that the action type, trigger type and
-	// payload are all valid and consistent with each other
-	Validate(action GenericChannelAction) error
-
 	// Update updates an existing action identified by action.ID
 	Update(action GenericChannelAction, userID string) error
 
@@ -86,7 +85,7 @@ type ChannelActionService interface {
 	CheckAndSendMessageOnJoin(userID, channelID string) bool
 
 	// MessageHasBeenPosted suggests playbooks to the user if triggered
-	MessageHasBeenPosted(sessionID string, post *model.Post)
+	MessageHasBeenPosted(post *model.Post)
 }
 
 type ChannelActionStore interface {

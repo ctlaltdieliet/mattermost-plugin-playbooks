@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -21,6 +21,13 @@ export const pluginUrl = (urlPath: string) => {
 
 export const navigateToPluginUrl = (urlPath: string) => {
     WebappUtils.browserHistory.push(pluginUrl(urlPath));
+};
+
+/**
+ * Navigate to channel given a channelId and teamName
+ */
+export const navigateToChannel = async (teamName: string, channelId: string) => {
+    navigateToUrl(`/${teamName}/channels/${channelId}`);
 };
 
 export const pluginErrorUrl = (type: string) => {

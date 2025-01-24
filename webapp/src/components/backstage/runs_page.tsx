@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useEffect, useState} from 'react';
@@ -21,7 +21,9 @@ import {useRunsList} from 'src/hooks';
 
 import {pluginUrl} from 'src/browser_routing';
 
-import Header from '../widgets/header';
+import Header from 'src/components/widgets/header';
+
+import {PlaybookRunType} from 'src/graphql/generated/graphql';
 
 import RunList from './runs_list/runs_list';
 import NoContentPage from './runs_page_no_content';
@@ -42,10 +44,11 @@ const defaultPlaybookFetchParams = {
     per_page: BACKSTAGE_LIST_PER_PAGE,
     sort: 'last_status_update_at',
     direction: 'desc',
-    participant_or_follower_id: 'me',
+    participant_or_follower_id: '',
     statuses: statusOptions
         .filter((opt) => opt.value !== 'Finished' && opt.value !== '')
         .map((opt) => opt.value),
+    types: [PlaybookRunType.Playbook],
 };
 
 const RunListContainer = styled.div`

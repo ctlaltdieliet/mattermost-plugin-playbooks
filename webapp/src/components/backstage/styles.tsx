@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import styled, {createGlobalStyle, css} from 'styled-components';
@@ -76,6 +76,7 @@ export const GlobalSelectStyle = createGlobalStyle`
         .playbooks-rselect__menu-list {
             background-color: var(--center-channel-bg);
             border: none;
+            border-radius: var(--radius-s);
         }
 
         .playbooks-rselect__input {
@@ -132,6 +133,13 @@ export const StyledSelect = styled(Select).attrs((props) => {
     };
 })`
     ${commonSelectStyle}
+
+    ${({classNamePrefix}) => css`
+        .${classNamePrefix}__multi-value {
+            padding-left: 6px;
+        }
+    `}
+
 `;
 
 export const StyledCreatable = styled(Creatable)`
@@ -153,6 +161,10 @@ export const StyledCreatable = styled(Creatable)`
 
         .${classNamePrefix}__single-value {
             color: var(--center-channel-color);
+        }
+
+        .${classNamePrefix}__multi-value {
+            padding-left: 6px;
         }
 
         .${classNamePrefix}__menu-list {
@@ -197,12 +209,7 @@ export const InfoLine = styled.div`
     line-height: 16px;
     color: rgba(var(--center-channel-color-rgb), 0.56);
 `;
-
-interface PlaybookRunFilterButtonProps {
-    active?: boolean;
-}
-
-export const PlaybookRunFilterButton = styled.button<PlaybookRunFilterButtonProps>`
+export const FilterButton = styled.button<{active?: boolean;}>`
     display: flex;
     align-items: center;
     border: none;

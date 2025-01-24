@@ -1,6 +1,9 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import {useSelector} from 'react-redux';
 
-import {isE10LicensedOrDevelopment, isE20LicensedOrDevelopment} from '../license';
+import {isE10LicensedOrDevelopment, isE20LicensedOrDevelopment} from 'src/license';
 
 // useAllowAddMessageToTimelineInCurrentTeam returns whether a user can add a
 // post to the timeline in the current team

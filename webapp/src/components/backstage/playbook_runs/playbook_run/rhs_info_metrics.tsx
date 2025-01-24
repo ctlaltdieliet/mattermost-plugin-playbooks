@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -122,12 +122,13 @@ const Value = ({metricValue, metricType, editable}: ValueProps) => {
     if (metricValue === null) {
         return (
             <ValuePlaceholder>
+                {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
                 {editable ? formatMessage({defaultMessage: 'Add value...'}) : '-'}
             </ValuePlaceholder>
         );
     }
 
-    const valueString = metricType === MetricType.Duration ? formatDuration(Duration.fromMillis(metricValue)) : String(metricValue);
+    const valueString = metricType === MetricType.MetricDuration ? formatDuration(Duration.fromMillis(metricValue)) : String(metricValue);
 
     return (
         <ValueContainer>{valueString}</ValueContainer>

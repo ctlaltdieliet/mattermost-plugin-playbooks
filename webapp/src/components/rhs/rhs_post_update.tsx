@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -24,6 +24,8 @@ interface Props {
     collapsed: boolean;
     playbookRun: PlaybookRun;
     updatesExist: boolean;
+    readOnly?: boolean;
+    onReadOnlyInteract?: () => void;
 }
 
 const RHSPostUpdate = (props: Props) => {
@@ -101,6 +103,10 @@ const RHSPostUpdate = (props: Props) => {
                 updatesExist={props.updatesExist}
                 disabled={props.playbookRun.current_status === PlaybookRunStatus.Finished}
                 onClick={() => {
+                    if (props.readOnly && props.onReadOnlyInteract) {
+                        props.onReadOnlyInteract();
+                        return;
+                    }
                     dispatch(promptUpdateStatus(
                         props.playbookRun.team_id,
                         props.playbookRun.id,
@@ -221,7 +227,7 @@ const UpdateNoticeTime = styled.div<CollapsedProps>`
 
 const Spacer = styled.div`
     flex-grow: 0;
-    flex-shrink: 0;
+    flex-shrink: 1;
     width: 44px;
 `;
 

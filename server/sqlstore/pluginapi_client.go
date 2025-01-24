@@ -1,11 +1,13 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package sqlstore
 
 import (
 	"database/sql"
 
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
-
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 // StoreAPI is the interface exposing the underlying database, provided by pluginapi

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import {useSelector} from 'react-redux';
@@ -41,7 +41,11 @@ const FormattedMarkdown = ({
     options,
 }: Props) => {
     const opts = useDefaultMarkdownOptions(options);
-    return messageHtmlToComponent(formatText(value, opts), true, {});
+    const messageHtmlToComponentOptions = {
+        hasPluginTooltips: true,
+    };
+
+    return messageHtmlToComponent(formatText(value, opts), true, messageHtmlToComponentOptions);
 };
 
 export default FormattedMarkdown;

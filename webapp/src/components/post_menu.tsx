@@ -1,8 +1,8 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {useSelector, useDispatch} from 'react-redux';
+import {useDispatch, useSelector} from 'react-redux';
 
 import styled from 'styled-components';
 
@@ -19,7 +19,7 @@ import {KeyVariantCircleIcon} from '@mattermost/compass-icons/components';
 
 import PlaybookRunPostMenuIcon from 'src/components/assets/icons/post_menu_icon';
 
-import {addToTimeline, startPlaybookRun, showPostMenuModal} from 'src/actions';
+import {addToTimeline, showPostMenuModal, startPlaybookRun} from 'src/actions';
 
 import {useAllowAddMessageToTimelineInCurrentTeam} from 'src/hooks';
 

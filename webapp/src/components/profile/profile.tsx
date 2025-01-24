@@ -1,8 +1,8 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useEffect} from 'react';
-import {useSelector, useDispatch} from 'react-redux';
+import {useDispatch, useSelector} from 'react-redux';
 import {GlobalState} from '@mattermost/types/store';
 import {UserProfile} from '@mattermost/types/users';
 import {displayUsername} from 'mattermost-redux/utils/user_utils';
@@ -30,7 +30,7 @@ const PlaybookRunProfile = styled.div`
     align-items: center;
 `;
 
-const ProfileImage = styled.img`
+export const ProfileImage = styled.img`
     margin: 0 8px 0 0;
     width: 32px;
     height: 32px;
@@ -50,7 +50,7 @@ const ProfileImage = styled.img`
     }
 `;
 
-const ProfileName = styled.div<{hasExtra: boolean}>`
+export const ProfileName = styled.div<{hasExtra: boolean}>`
     padding: 0;
     white-space: nowrap;
     overflow: hidden;

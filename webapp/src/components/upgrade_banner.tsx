@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React, {useState} from 'react';
@@ -10,14 +10,14 @@ import General from 'mattermost-redux/constants/general';
 
 import {FormattedMessage} from 'react-intl';
 
-import Spinner from 'src/components/assets/icons/spinner';
-import {getAdminAnalytics, isTeamEdition} from 'src/selectors';
+import LoadingSpinner from 'src/components/assets/loading_spinner';
+import {isTeamEdition} from 'src/selectors';
 import StartTrialNotice from 'src/components/backstage/start_trial_notice';
 import ConvertEnterpriseNotice from 'src/components/backstage/convert_enterprise_notice';
-import {requestTrialLicense, postMessageToAdmins} from 'src/client';
+import {postMessageToAdmins} from 'src/client';
 import {AdminNotificationType} from 'src/constants';
 import {isCloud} from 'src/license';
-import {useOpenCloudModal} from 'src/hooks';
+import {useOpenContactSales, useOpenStartTrialFormModal} from 'src/hooks';
 
 import SuccessSvg from './assets/success_svg';
 import ErrorSvg from './assets/error_svg';
@@ -120,14 +120,12 @@ interface Props {
 
 const UpgradeBanner = (props: Props) => {
     const isServerCloud = useSelector(isCloud);
-    const openCloudModal = useOpenCloudModal();
+    const openContactSales = useOpenContactSales();
     const currentUser = useSelector(getCurrentUser);
     const isCurrentUserAdmin = isSystemAdmin(currentUser.roles);
     const [actionState, setActionState] = useState(ActionState.Uninitialized);
     const isServerTeamEdition = useSelector(isTeamEdition);
-
-    const analytics = useSelector(getAdminAnalytics);
-    const serverTotalUsers = analytics?.TOTAL_USERS || 0;
+    const openTrialFormModal = useOpenStartTrialFormModal();
 
     const endUserMainAction = async () => {
         if (actionState === ActionState.Loading) {
@@ -149,15 +147,7 @@ const UpgradeBanner = (props: Props) => {
             return;
         }
 
-        setActionState(ActionState.Loading);
-
-        const requestedUsers = Math.max(serverTotalUsers, 30);
-        const response = await requestTrialLicense(requestedUsers, props.notificationType);
-        if (response.error) {
-            setActionState(ActionState.Error);
-        } else {
-            setActionState(ActionState.Success);
-        }
+        openTrialFormModal('playbooks_upgrade_banner');
     };
 
     const openUpgradeModal = async () => {
@@ -165,7 +155,7 @@ const UpgradeBanner = (props: Props) => {
             return;
         }
 
-        openCloudModal();
+        openContactSales();
     };
 
     let adminMainAction = requestLicenseSelfHosted;
@@ -245,7 +235,7 @@ interface ButtonProps {
 
 const Button = (props: ButtonProps) => {
     if (props.actionState === ActionState.Loading) {
-        return <Spinner/>;
+        return <LoadingSpinner/>;
     }
 
     if (props.actionState === ActionState.Success) {

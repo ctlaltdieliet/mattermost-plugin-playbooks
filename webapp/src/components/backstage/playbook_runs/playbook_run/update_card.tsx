@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import styled from 'styled-components';
@@ -13,7 +13,7 @@ import {displayUsername} from 'mattermost-redux/utils/user_utils';
 import {getTeammateNameDisplaySetting} from 'mattermost-redux/selectors/entities/preferences';
 import {Client4} from 'mattermost-redux/client';
 
-import {Timestamp, messageHtmlToComponent, formatText} from 'src/webapp_globals';
+import {Timestamp, formatText, messageHtmlToComponent} from 'src/webapp_globals';
 
 import {useEnsureProfile} from 'src/hooks';
 import {StatusPostComplete} from 'src/types/playbook_run';
@@ -50,6 +50,10 @@ const StatusUpdateCard = ({post}: Props) => {
         atMentions: true,
     };
 
+    const messageHtmlToComponentOptions = {
+        hasPluginTooltips: true,
+    };
+
     return (
         <Container data-testid='status-update-card'>
             <Header>
@@ -63,7 +67,7 @@ const StatusUpdateCard = ({post}: Props) => {
                 </Date>
             </Header>
             <Body>
-                {messageHtmlToComponent(formatText(post.message, markdownOptions), true, {})}
+                {messageHtmlToComponent(formatText(post.message, markdownOptions), true, messageHtmlToComponentOptions)}
             </Body>
         </Container>
     );

@@ -1,7 +1,10 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import {useEffect} from 'react';
 
 import {telemetryEventForPlaybook, telemetryEventForPlaybookRun, telemetryView} from 'src/client';
-import {PlaybookViewTarget, PlaybookRunViewTarget, TelemetryViewTarget} from 'src/types/telemetry';
+import {PlaybookRunViewTarget, PlaybookViewTarget, TelemetryViewTarget} from 'src/types/telemetry';
 
 export const useViewTelemetry = (target: TelemetryViewTarget, dep?: string, data = {}) => {
     useEffect(() => {

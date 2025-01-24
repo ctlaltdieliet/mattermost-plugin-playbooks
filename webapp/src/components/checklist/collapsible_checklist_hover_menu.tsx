@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -6,11 +6,7 @@ import styled from 'styled-components';
 import {useIntl} from 'react-intl';
 import {DraggableProvidedDragHandleProps} from 'react-beautiful-dnd';
 
-import {
-    clientSkipChecklist,
-    clientRestoreChecklist,
-    clientDuplicateChecklist,
-} from 'src/client';
+import {clientDuplicateChecklist, clientRestoreChecklist, clientSkipChecklist} from 'src/client';
 import {HamburgerButton} from 'src/components/assets/icons/three_dots_icon';
 import DotMenu, {DotMenuButton, DropdownMenu, DropdownMenuItem} from 'src/components/dot_menu';
 import {HoverMenuButton} from 'src/components/rhs/rhs_shared';

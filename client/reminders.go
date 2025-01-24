@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 package client
 
 import (
@@ -14,7 +17,7 @@ type RemindersService struct {
 func (s *RemindersService) Reset(ctx context.Context, playbookRunID string, payload ReminderResetPayload) error {
 	resetURL := fmt.Sprintf("runs/%s/reminder", playbookRunID)
 
-	req, err := s.client.newRequest(http.MethodPost, resetURL, payload)
+	req, err := s.client.newAPIRequest(http.MethodPost, resetURL, payload)
 	if err != nil {
 		return err
 	}

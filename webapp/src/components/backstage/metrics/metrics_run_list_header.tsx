@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -34,7 +34,7 @@ const MetricsRunListHeader = ({metricsInfo, fetchParams, setFetchParams}: Props)
         let direction = 'asc';
         if (index > -1) {
             // change to a new column; default to descending for time-based columns, ascending otherwise
-            direction = (metricsInfo[index].type === MetricType.Duration) ? 'desc' : 'asc';
+            direction = (metricsInfo[index].type === MetricType.MetricDuration) ? 'desc' : 'asc';
         }
 
         setFetchParams((oldParams) => ({...oldParams, sort: colName, direction}));

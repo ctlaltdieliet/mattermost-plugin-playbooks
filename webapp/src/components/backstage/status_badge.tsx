@@ -1,5 +1,6 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
+
 import React from 'react';
 
 import styled, {css} from 'styled-components';
@@ -26,7 +27,7 @@ const Badge = styled.div<BadgeProps>`
     font-weight: 600;
     margin: 2px;
 
-    color: var(--sidebar-text);
+    color: var(--button-color);
 
     ${(props) => {
         switch (props.status) {

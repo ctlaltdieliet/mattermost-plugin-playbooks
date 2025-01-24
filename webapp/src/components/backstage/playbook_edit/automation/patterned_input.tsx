@@ -1,4 +1,4 @@
-// Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
 import React from 'react';
@@ -23,7 +23,7 @@ export const PatternedInput = (props: Props) => (
             disabled={!props.enabled}
             type={props.type}
             required={true}
-            value={props.enabled ? props.input : ''}
+            value={props.input}
             onChange={(e) => props.onChange(e.target.value)}
             pattern={props.pattern}
             placeholder={props.placeholderText}
@@ -50,11 +50,9 @@ const TextBox = styled.input<TextBoxProps>`
         color: var(--center-channel-color);
         opacity: 0.64;
     }
-
+    background: ${(props) => (props.disabled ? 'auto' : 'var(--center-channel-bg)')};
     height: 40px;
     width: 100%;
-
-    background-color: ${(props) => (props.disabled ? 'rgba(var(--center-channel-bg-rgb), 0.16)' : 'var(--center-channel-bg)')};
     color: var(--center-channel-color);
     border-radius: 4px;
     border: none;

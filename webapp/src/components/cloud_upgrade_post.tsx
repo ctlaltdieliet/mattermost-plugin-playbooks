@@ -1,3 +1,6 @@
+// Copyright (c) 2020-present Mattermost, Inc. All Rights Reserved.
+// See LICENSE.txt for license information.
+
 import React from 'react';
 
 import {useSelector} from 'react-redux';
@@ -16,8 +19,13 @@ import {FormattedMessage} from 'react-intl';
 import UpgradeIllustrationSvg from 'src/components/assets/upgrade_illustration_svg';
 import {PrimaryButton, TertiaryButton} from 'src/components/assets/buttons';
 import PostText from 'src/components/post_text';
-import {CustomPostContainer, CustomPostContent, CustomPostHeader, CustomPostButtonRow} from 'src/components/custom_post_styles';
-import {useOpenCloudModal} from 'src/hooks';
+import {
+    CustomPostButtonRow,
+    CustomPostContainer,
+    CustomPostContent,
+    CustomPostHeader,
+} from 'src/components/custom_post_styles';
+import {useOpenContactSales} from 'src/hooks';
 
 const StyledTertiaryButton = styled(TertiaryButton)`
     margin-left: 10px;
@@ -28,11 +36,12 @@ interface Props {
 }
 
 export const CloudUpgradePost = (props: Props) => {
-    const openCloudModal = useOpenCloudModal();
     const attachments = props.post.props.attachments[0];
 
     const channel = useSelector<GlobalState, Channel>((state) => getChannel(state, props.post.channel_id));
     const team = useSelector<GlobalState, Team>((state) => getTeam(state, channel.team_id));
+
+    const openContactSales = useOpenContactSales();
 
     // Remove the footer (which starts with the Upgrade now link),
     // and the separator, both used as fallback for mobile
@@ -53,8 +62,8 @@ export const CloudUpgradePost = (props: Props) => {
                         {text}
                     </TextBody>
                     <CustomPostButtonRow>
-                        <PrimaryButton onClick={openCloudModal} >
-                            <FormattedMessage defaultMessage='Upgrade now'/>
+                        <PrimaryButton onClick={openContactSales} >
+                            <FormattedMessage defaultMessage='Contact Sales'/>
                         </PrimaryButton>
                         <StyledTertiaryButton
                             onClick={() => window.open('https://mattermost.com/pricing-cloud')}
